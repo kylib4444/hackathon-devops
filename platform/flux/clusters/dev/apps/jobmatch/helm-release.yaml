@@ -22,8 +22,8 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-438723a
+        tag: v1.0.0-c5d79a9
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-438723a
+        tag: v1.0.0-c5d79a9
