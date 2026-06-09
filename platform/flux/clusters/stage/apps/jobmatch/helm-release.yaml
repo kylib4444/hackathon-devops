@@ -33,3 +33,7 @@ spec:
       enabled: true
     qdrant:
       enabled: true
+    redis:
+      enabled: true
+      image:
+        tag: 7.2.5-debian-12-r14
