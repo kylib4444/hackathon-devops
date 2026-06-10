@@ -8,11 +8,11 @@ spec:
   chart:
     spec:
       chart: ./platform/helm/jobmatch
-      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: flux-system
         namespace: flux-system
+      reconcileStrategy: Revision
   install:
     remediation:
       retries: 3
@@ -22,22 +22,18 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-b381b19
-      resources:
-        requests:
-          cpu: 100m
-          memory: 256Mi
-        limits:
-          cpu: 500m
-          memory: 512Mi
+        repository: ghcr.io/kylib4444/jobmatch-api
+        tag: v1.0.0-3bdac60
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-b381b19
-      resources:
-        requests:
-          cpu: 50m
-          memory: 64Mi
-        limits:
-          cpu: 200m
-          memory: 128Mi
+        repository: ghcr.io/kylib4444/jobmatch-web
+        tag: v1.0.0-3bdac60
+    redis:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/redis
+        tag: latest
+    qdrant:
+      enabled: true
