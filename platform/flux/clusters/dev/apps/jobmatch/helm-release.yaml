@@ -8,22 +8,32 @@ spec:
   chart:
     spec:
       chart: ./platform/helm/jobmatch
-      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: flux-system
         namespace: flux-system
+      reconcileStrategy: Revision
   install:
     remediation:
       retries: 3
   values:
     global:
-      environment: dev
+      environment: stage
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-4191138
+        repository: ghcr.io/kylib4444/jobmatch-api
+        tag: latest
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-4191138
+        repository: ghcr.io/kylib4444/jobmatch-web
+        tag: latest
+    redis:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/redis
+        tag: latest
+    qdrant:
+      enabled: true

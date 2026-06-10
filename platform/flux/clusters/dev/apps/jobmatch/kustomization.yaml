@@ -1,13 +1,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
-namespace: jobmatch-dev
-
 resources:
   - ns.yaml
   - helm-release.yaml
-
-labels:
-  - includeSelectors: true
-    pairs:
-      environment: development
