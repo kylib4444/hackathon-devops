@@ -23,12 +23,12 @@ spec:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
-        tag: v1.0.0-9b8854a
+        tag: v1.0.0-646db6a
     web:
       replicaCount: 1
       image:
         repository: ghcr.io/kylib4444/jobmatch-web
-        tag: v1.0.0-9b8854a
+        tag: v1.0.0-646db6a
     redis:
       enabled: true
       image:
