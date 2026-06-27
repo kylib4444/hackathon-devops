@@ -13,13 +13,11 @@ spec:
             policies:
               auth:
                 secretRef:
-                  name: llm-secrets
-                  key: claude-api-key
+                  name: claude-auth-secret
           - name: gemini-flash
             gemini:
               model: gemini-3.5-flash
             policies:
               auth:
                 secretRef:
-                  name: llm-secrets
-                  key: gemini-api-key
+                  name: gemini-auth-secret
