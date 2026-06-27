@@ -13,7 +13,7 @@ resources:
   - agentgateway-route.yaml
   - agentgateway-backend.yaml
   - mock-llm.yaml
- # - podmonitor.yaml
+  - podmonitor.yaml
   - prometheus-rbac.yaml
   - grafana-repo.yaml 
   - observability-routes.yaml
