@@ -23,18 +23,18 @@ spec:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
-        tag: "v1.0.0-14abd6e"
+        tag: "v1.0.0-3e4c29b"
       env:
         LLM_PROVIDER: "auto"
     web:
       replicaCount: 1
-      service:                
-        type: LoadBalancer     
-        port: 80               
-        targetPort: 80         
+      service:
+        type: LoadBalancer
+        port: 80
+        targetPort: 80
       image:
         repository: ghcr.io/mkdir28/jobmatch-web
-        tag: "v1.0.0-14abd6e"
+        tag: "v1.0.0-3e4c29b"
     redis:
       enabled: true
       image:
