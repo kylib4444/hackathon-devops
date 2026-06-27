@@ -3,6 +3,7 @@ import { config } from '../../config.js';
 import { schemaInstruction, parseJsonFromModelText } from '../json.js';
 import { buildSkillsSystemAppendix } from '../skills/loader.js';
 import type { AIClient, LlmProviderId, StructuredGenerateRequest } from '../types.js';
+import { aiRequestCounter } from '../../metrics.js';
 
 export class OpenAIProvider implements AIClient {
   readonly provider: LlmProviderId = 'openai';
@@ -21,37 +22,50 @@ export class OpenAIProvider implements AIClient {
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
-    const skills = buildSkillsSystemAppendix(request.task);
-    const system =
-      request.systemPrompt +
-      skills +
-      '\n\n' +
-      schemaInstruction(request.jsonSchema);
+    // Вказуємо task з реквесту, щоб бачити розбивку по задачах у Grafana
+    aiRequestCounter.labels(request.task, 'started').inc();
 
-    const response = await this.client.chat.completions.create({
-      model: this.model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: request.userPrompt },
-      ],
-      response_format: request.jsonSchema
-        ? {
-            type: 'json_schema',
-            json_schema: {
-              name: `${request.task}_response`,
-              strict: false,
-              schema: request.jsonSchema,
-            },
-          }
-        : { type: 'json_object' },
-    }, {
-      headers: {
-        'x-gateway-task-name': request.task,
-      }
-    });
+    try {
+      const skills = buildSkillsSystemAppendix(request.task);
+      const system =
+        request.systemPrompt +
+        skills +
+        '\n\n' +
+        schemaInstruction(request.jsonSchema);
 
-    const text = response.choices[0]?.message?.content;
-    if (!text) throw new Error('Empty OpenAI response');
-    return parseJsonFromModelText<T>(text);
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: request.userPrompt },
+        ],
+        response_format: request.jsonSchema
+          ? {
+              type: 'json_schema',
+              json_schema: {
+                name: `${request.task}_response`,
+                strict: false,
+                schema: request.jsonSchema,
+              },
+            }
+          : { type: 'json_object' },
+      }, {
+        headers: {
+          'x-gateway-task-name': request.task,
+        }
+      });
+
+      const text = response.choices[0]?.message?.content;
+      if (!text) throw new Error('Empty OpenAI response');
+
+      // Успіх!
+      aiRequestCounter.labels(request.task, 'success').inc();
+      
+      return parseJsonFromModelText<T>(text);
+    } catch (err) {
+      // Помилка!
+      aiRequestCounter.labels(request.task, 'error').inc();
+      throw err;
+    }
   }
 }
