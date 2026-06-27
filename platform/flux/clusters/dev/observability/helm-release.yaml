@@ -23,7 +23,9 @@ spec:
           - ReadWriteOnce
         size: 2Gi
       service:
-        type: ClusterIP
+        type: LoadBalancer
+        port: 3000
+        targetPort: 3000
       sidecar:
         datasources:
           enabled: true
