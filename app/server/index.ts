@@ -18,9 +18,12 @@ const app = express();
 // @ts-ignore
 app.get('/metrics', async (_req: any, res: any) => {
   try {
+    const metrics = await register.metrics();
+    console.log("DEBUG: Metrics length:", metrics.length); 
     res.set('Content-Type', register.contentType);
-    res.send(await register.metrics());
+    res.send(metrics);
   } catch (ex) {
+    console.error("DEBUG: Metrics error:", ex); 
     res.status(500).send(ex);
   }
 });
