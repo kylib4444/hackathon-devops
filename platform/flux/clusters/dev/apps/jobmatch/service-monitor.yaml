@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: jobmatch-dev-api
+      app.kubernetes.io/name: jobmatch
       app.kubernetes.io/instance: jobmatch-dev
   endpoints:
   - port: http 
