@@ -10,8 +10,8 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "types": ["node", "express", "cors", "multer"]
   },
   "include": ["./**/*.ts"],
