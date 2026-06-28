@@ -12,7 +12,6 @@ import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
 import { register } from 'prom-client';
 // import mcpRoutes from './routes/mcp.js';
-
 const app = express();
 
 // @ts-ignore
