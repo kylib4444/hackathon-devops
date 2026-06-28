@@ -217,8 +217,8 @@ jobs:
           file: ./app/Dockerfile.api
           push: true
           tags: ${{ steps.config.outputs.api_tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+#          cache-from: type=gha
+#          cache-to: type=gha,mode=max
 
       - name: Update Dev Image Tag in Git
         if: github.ref_name == 'dev' && needs.detect-changes.outputs.code_changed == 'true'
