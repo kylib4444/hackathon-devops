@@ -13,9 +13,15 @@ import jobsRoutes from './routes/jobs.js';
 import { register, collectDefaultMetrics, Counter } from 'prom-client';
 // import mcpRoutes from './routes/mcp.js';
 
+export const llmTokensCounter = new Counter({
+  name: 'jobmatch_llm_tokens_total',
+  help: 'Total number of LLM tokens consumed',
+  labelNames: ['model', 'token_type']
+});
+
 const testCounter = new Counter({
   name: 'test_metric_total',
-  help: 'Це тестова метрика, щоб перевірити Prometheus',
+  help: 'this is test metric to check Prometheus',
 });
 
 try {

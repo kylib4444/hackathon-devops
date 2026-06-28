@@ -4,6 +4,7 @@ import { schemaInstruction, parseJsonFromModelText } from '../json.js';
 import { buildSkillsSystemAppendix } from '../skills/loader.js';
 import type { AIClient, LlmProviderId, StructuredGenerateRequest } from '../types.js';
 import { aiRequestCounter } from '../../metrics.js';
+import { llmTokensCounter } from '../../index.js';
 
 export class OpenAIProvider implements AIClient {
   readonly provider: LlmProviderId = 'openai';
@@ -22,7 +23,6 @@ export class OpenAIProvider implements AIClient {
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
-    // Вказуємо task з реквесту, щоб бачити розбивку по задачах у Grafana
     aiRequestCounter.labels(request.task, 'started').inc();
 
     try {
@@ -32,7 +32,6 @@ export class OpenAIProvider implements AIClient {
         skills +
         '\n\n' +
         schemaInstruction(request.jsonSchema);
-
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -55,17 +54,24 @@ export class OpenAIProvider implements AIClient {
         }
       });
 
+      if (response.usage) {
+        if (response.usage.prompt_tokens) {
+          llmTokensCounter.labels(this.model, 'prompt').inc(response.usage.prompt_tokens);
+        }
+        if (response.usage.completion_tokens) {
+          llmTokensCounter.labels(this.model, 'completion').inc(response.usage.completion_tokens);
+        }
+      }
+
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error('Empty OpenAI response');
 
-      // Успіх!
       aiRequestCounter.labels(request.task, 'success').inc();
       
       return parseJsonFromModelText<T>(text);
     } catch (err) {
-      // Помилка!
       aiRequestCounter.labels(request.task, 'error').inc();
       throw err;
     }
-  }
+    }
 }
