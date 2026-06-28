@@ -227,19 +227,19 @@ jobs:
       - name: Update Dev Image Tag in Git
         if: github.ref_name == 'dev' && needs.detect-changes.outputs.code_changed == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SHA="${{ steps.sha.outputs.short }}"
-          TAG="$VERSION-$SHA"
+          # Встановлюємо тег як 'latest', щоб Kubernetes завжди тягнув актуальний образ
+          TAG="latest"
           
-          # Update tag in dev helm-release.yaml
+          # Оновлюємо helm-release.yaml
           yq -i ".spec.values.api.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
           yq -i ".spec.values.web.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
           
-          # Commit and push dev image tag update
+          # Commit and push
           if [ -n "$(git status --porcelain platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml)" ]; then
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git add platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
-            git commit -m "chore(gitops): update dev image tag to $TAG [skip ci]"
+            git commit -m "chore(gitops): update dev image tag to latest [skip ci]"
             git push origin dev
           fi
+
