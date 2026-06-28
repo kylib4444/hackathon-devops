@@ -9,7 +9,6 @@ import { logDemoModeWarningIfNeeded } from './demo-notice.js';
 
 export function createAIClient(): AIClient {
   const resolved = resolveLlmConfig();
-
   if (resolved.demoMode || resolved.provider === 'demo') {
     logDemoModeWarningIfNeeded();
     return new DemoAIClient();
@@ -23,12 +22,9 @@ export function createAIClient(): AIClient {
   }
 
   switch (resolved.provider) {
-    case 'openai':
-      return new OpenAIProvider(resolved.model);
-    case 'gemini':
-      return new GeminiProvider(resolved.model);
-    case 'claude':
-      return new ClaudeProvider(resolved.model);
+    case 'openai': return new OpenAIProvider(resolved.model);
+    case 'gemini': return new GeminiProvider(resolved.model);
+    case 'claude': return new ClaudeProvider(resolved.model);
     default:
       logDemoModeWarningIfNeeded();
       return new DemoAIClient();
@@ -37,67 +33,48 @@ export function createAIClient(): AIClient {
 
 let singleton: AIClient | null = null;
 
-/** Shared AI client (provider chosen from environment). */
 export function getAIClient(): AIClient {
   if (!singleton) {
     const primaryClient = createAIClient();
     const r = resolveLlmConfig();
-    console.info(`[ai] provider=${r.provider} model=${r.model} demo=${r.demoMode}`);
     
-    if (r.demoMode) {
-      logDemoModeWarningIfNeeded();
-    } else {
-      const keyHint: Record<LlmProviderId, string> = {
-        openai: 'OPENAI_API_KEY',
-        gemini: 'GEMINI_API_KEY',
-        claude: 'ANTHROPIC_API_KEY',
-        demo: '',
-      };
-      console.info(`[ai] docs: OpenAI https://developers.openai.com/api/docs/ | Gemini https://github.com/google-gemini/api-examples | Claude https://docs.anthropic.com/`);
-      if (keyHint[r.provider]) {
-        console.info(`[ai] active credential: ${keyHint[r.provider]}`);
-      }
-    }
-
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
         const origMethod = (target as any)[propKey];
-        // Якщо це функція (виклик до API)
-        if (typeof origMethod === 'function') {
-          return async function (...args: any[]) {
-            try {
-              return await origMethod.apply(target, args);
-            } catch (error: any) {
-              console.error("!!! AI ERROR DETECTED !!!", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        if (typeof origMethod !== 'function') return origMethod;
 
-              const status = error?.status || error?.response?.status || error?.statusCode || 0;
-              const msg = (error?.message || "").toString();
-              
-              const isRateLimit = status === 429 || 
-                                  msg.includes('429') || 
-                                  msg.includes('Too Many Requests') || 
-                                  msg.includes('quota');
-
-              if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
-                console.warn(`⚠️ [ai] Перехоплено 429. Перемикаю на Gemini!`);
-                const fallbackClient = new GeminiProvider(config.geminiModel);
-                return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
-              }
-              
-              throw error;
-            }
+        return async function (...args: any[]) {
+          // Допоміжна функція для перевірки 429
+          const is429 = (val: any) => {
+            const s = JSON.stringify(val || "").toLowerCase();
+            return s.includes('429') || s.includes('quota') || s.includes('rate limit');
           };
-        }
-        return origMethod;
+
+          try {
+            const result = await origMethod.apply(target, args);
+            
+            // ПЕРЕВІРКА РЕЗУЛЬТАТУ (якщо API повернуло JSON з помилкою)
+            if (is429(result) && config.geminiApiKey && r.provider !== 'gemini') {
+              console.warn(`⚠️ [ai] Перехоплено 429 у відповіді API. Фалбек на Gemini.`);
+              const fallbackClient = new GeminiProvider(config.geminiModel);
+              return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
+            }
+            return result;
+          } catch (error: any) {
+            // ПЕРЕВІРКА ПОМИЛКИ (якщо API викинуло Exception)
+            if (is429(error) && config.geminiApiKey && r.provider !== 'gemini') {
+              console.warn(`⚠️ [ai] Перехоплено 429 (Exception). Фалбек на Gemini.`);
+              const fallbackClient = new GeminiProvider(config.geminiModel);
+              return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
+            }
+            throw error;
+          }
+        };
       }
     }) as AIClient;
   }
   return singleton;
 }
 
-/** Reset client (tests or hot reload). */
-export function resetAIClient(): void {
-  singleton = null;
-}
-
+export function resetAIClient(): void { singleton = null; }
 export { config as aiConfig };
