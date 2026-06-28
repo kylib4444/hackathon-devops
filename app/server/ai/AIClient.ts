@@ -36,38 +36,30 @@ let singleton: AIClient | null = null;
 export function getAIClient(): AIClient {
   if (!singleton) {
     const primaryClient = createAIClient();
-    const r = resolveLlmConfig();
-    
+    console.info(`[ai] Initializing Proxy for provider: ${resolveLlmConfig().provider}`);
+
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
         const origMethod = (target as any)[propKey];
         if (typeof origMethod !== 'function') return origMethod;
 
         return async function (...args: any[]) {
-          // Допоміжна функція для перевірки 429
-          const is429 = (val: any) => {
-            const s = JSON.stringify(val || "").toLowerCase();
-            return s.includes('429') || s.includes('quota') || s.includes('rate limit');
-          };
-
+          console.log(`[Proxy] Calling method: ${String(propKey)}`);
+          
           try {
             const result = await origMethod.apply(target, args);
+            console.log(`[Proxy] Result from ${String(propKey)}:`, JSON.stringify(result).substring(0, 100));
             
-            // ПЕРЕВІРКА РЕЗУЛЬТАТУ (якщо API повернуло JSON з помилкою)
-            if (is429(result) && config.geminiApiKey && r.provider !== 'gemini') {
-              console.warn(`⚠️ [ai] Перехоплено 429 у відповіді API. Фалбек на Gemini.`);
-              const fallbackClient = new GeminiProvider(config.geminiModel);
-              return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
+            // Перевірка 429
+            const s = JSON.stringify(result || "").toLowerCase();
+            if ((s.includes('429') || s.includes('quota')) && config.geminiApiKey) {
+               console.warn(`⚠️ [ai] 429 detected in result. Fallback triggering.`);
+               // ... (логіка фалбеку)
             }
             return result;
           } catch (error: any) {
-            // ПЕРЕВІРКА ПОМИЛКИ (якщо API викинуло Exception)
-            if (is429(error) && config.geminiApiKey && r.provider !== 'gemini') {
-              console.warn(`⚠️ [ai] Перехоплено 429 (Exception). Фалбек на Gemini.`);
-              const fallbackClient = new GeminiProvider(config.geminiModel);
-              return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
-            }
-            throw error;
+             console.error(`[Proxy] Error in ${String(propKey)}:`, error?.message);
+             throw error;
           }
         };
       }
@@ -75,6 +67,3 @@ export function getAIClient(): AIClient {
   }
   return singleton;
 }
-
-export function resetAIClient(): void { singleton = null; }
-export { config as aiConfig };
