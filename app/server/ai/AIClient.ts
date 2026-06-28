@@ -36,7 +36,8 @@ let singleton: AIClient | null = null;
 export function getAIClient(): AIClient {
   if (!singleton) {
     const primaryClient = createAIClient();
-    console.info(`[ai] Initializing Proxy for provider: ${resolveLlmConfig().provider}`);
+    const r = resolveLlmConfig();
+    console.info(`[ai] Initializing Proxy for provider: ${r.provider}`);
 
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
@@ -44,22 +45,34 @@ export function getAIClient(): AIClient {
         if (typeof origMethod !== 'function') return origMethod;
 
         return async function (...args: any[]) {
-          console.log(`[Proxy] Calling method: ${String(propKey)}`);
-          
+          const is429 = (val: any) => {
+            const s = JSON.stringify(val || "").toLowerCase();
+            return s.includes('429') || s.includes('quota') || s.includes('rate limit');
+          };
+
           try {
             const result = await origMethod.apply(target, args);
-            console.log(`[Proxy] Result from ${String(propKey)}:`, JSON.stringify(result).substring(0, 100));
             
-            // Перевірка 429
-            const s = JSON.stringify(result || "").toLowerCase();
-            if ((s.includes('429') || s.includes('quota')) && config.geminiApiKey) {
+            // Якщо API повернуло помилку в тілі JSON
+            if (is429(result) && config.geminiApiKey && r.provider !== 'gemini') {
                console.warn(`⚠️ [ai] 429 detected in result. Fallback triggering.`);
-               // ... (логіка фалбеку)
+               const fallbackClient = new GeminiProvider(config.geminiModel);
+               return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
             }
             return result;
           } catch (error: any) {
-             console.error(`[Proxy] Error in ${String(propKey)}:`, error?.message);
-             throw error;
+              const msg = (error?.message || "").toString();
+              const isRateLimit = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit');
+              
+              console.error(`[Proxy] Caught error: ${msg}`);
+              console.error(`[Proxy] Condition status: RateLimit=${isRateLimit}, HasKey=${!!config.geminiApiKey}, Provider=${r.provider}`);
+
+              if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
+                console.warn(`⚠️ [ai] Перехоплено 429. Перемикаю на Gemini!`);
+                const fallbackClient = new GeminiProvider(config.geminiModel);
+                return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
+              }
+              throw error;
           }
         };
       }
@@ -67,3 +80,5 @@ export function getAIClient(): AIClient {
   }
   return singleton;
 }
+
+export { config as aiConfig };
