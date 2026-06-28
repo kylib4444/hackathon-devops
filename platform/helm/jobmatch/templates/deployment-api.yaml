@@ -48,7 +48,7 @@ spec:
                   name: llm-secrets
                   key: openai-api-key
                   optional: true
-            - name: ANTHROPIC_API_KEY
+            - name: CLAUDE_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: llm-secrets
