@@ -7,8 +7,10 @@ metadata:
     {{- include "jobmatch.labels" . | nindent 4 }}
 spec:
   ports:
-    - port: {{ .Values.api.port }}
+    - name: http
+      port: {{ .Values.api.port }}
       targetPort: {{ .Values.api.port }}
+      protocol: TCP
   selector:
     {{- include "jobmatch.selectorLabels" . | nindent 4 }}
     app: {{ include "jobmatch.fullname" . }}-api
