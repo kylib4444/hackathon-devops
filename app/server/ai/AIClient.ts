@@ -62,28 +62,22 @@ export function getAIClient(): AIClient {
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
         const origMethod = (target as any)[propKey];
-        // Якщо це функція (виклик до API)
         if (typeof origMethod === 'function') {
           return async function (...args: any[]) {
             try {
-              // 1. Спроба виконати запит через основного провайдера
               return await origMethod.apply(target, args);
             } catch (error: any) {
-              // 1. Дебаг лог: виводимо структуру помилки
               console.error("DEBUG AI ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
-              // 2. Розширене визначення помилки (збираємо всі можливі місця, де лежить 429)
               const errorMessage = error?.message || "";
               const errorCode = error?.status || error?.response?.status || 0;
               
-              // Об'єднуємо перевірки в одну зміну
               const isRateLimit = errorCode === 429 || 
                                   errorMessage.includes('429') || 
                                   errorMessage.includes('quota');
 
-              // 3. Запобіжник: фалбек тільки якщо це ліміти, ключ є, і ми не на Gemini
               if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
-                console.warn(`⚠️ [ai] Провайдер ${r.provider} повернув 429 (Rate Limit). Автоматичний фалбек на Gemini...`);
+                console.warn(`⚠️ [ai] Провайдер ${r.provider} повернув 429. Автоматичний фалбек на Gemini...`);
                 
                 const fallbackClient = new GeminiProvider(config.geminiModel);
                 const fallbackMethod = (fallbackClient as any)[propKey];
@@ -92,3 +86,12 @@ export function getAIClient(): AIClient {
               }
               
               throw error;
+            } 
+          }; 
+        } 
+        return origMethod;
+      } 
+    }) as AIClient; 
+  } 
+  return singleton;
+}
