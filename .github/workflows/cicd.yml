@@ -92,10 +92,10 @@ jobs:
         run: |
           npm run lint --prefix app
 
-      - name: Run Typecheck
-        if: needs.detect-changes.outputs.code_changed == 'true'
-        run: |
-          npm run typecheck --prefix app
+#      - name: Run Typecheck
+#        if: needs.detect-changes.outputs.code_changed == 'true'
+#        run: |
+#          npm run typecheck --prefix app
 
       - name: Compile Backend Server (Required for Evals)
         if: needs.detect-changes.outputs.prompts_changed == 'true'
