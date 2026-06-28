@@ -23,7 +23,7 @@ spec:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
-        tag: "v1.0.0-3e4c29b"
+        tag: "v1.0.0-17c93d7"
       env:
         LLM_PROVIDER: "auto"
     web:
@@ -34,7 +34,7 @@ spec:
         targetPort: 80
       image:
         repository: ghcr.io/mkdir28/jobmatch-web
-        tag: "v1.0.0-3e4c29b"
+        tag: "v1.0.0-17c93d7"
     redis:
       enabled: true
       image:
