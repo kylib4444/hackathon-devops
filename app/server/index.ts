@@ -10,9 +10,19 @@ import { loadJobBoardCatalog } from './agent/boards.js';
 import { webSearchBackend } from './agent/tools/web-search.js';
 import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
+import { register } from 'prom-client';
 // import mcpRoutes from './routes/mcp.js';
 
 const app = express();
+
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.send(await register.metrics());
+  } catch (ex) {
+    res.status(500).send(ex);
+  }
+});
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
