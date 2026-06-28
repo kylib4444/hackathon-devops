@@ -69,29 +69,26 @@ export function getAIClient(): AIClient {
               // 1. Спроба виконати запит через основного провайдера
               return await origMethod.apply(target, args);
             } catch (error: any) {
-              // 2. Перевіряємо, чи це помилка лімітів (429 або quota)
-              const isRateLimit = error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota');
+              // 1. Дебаг лог: виводимо структуру помилки
+              console.error("DEBUG AI ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+
+              // 2. Розширене визначення помилки (збираємо всі можливі місця, де лежить 429)
+              const errorMessage = error?.message || "";
+              const errorCode = error?.status || error?.response?.status || 0;
               
-              // 3. Запобіжник: робимо фалбек на Gemini, тільки якщо ми ВЖЕ не на Gemini
+              // Об'єднуємо перевірки в одну зміну
+              const isRateLimit = errorCode === 429 || 
+                                  errorMessage.includes('429') || 
+                                  errorMessage.includes('quota');
+
+              // 3. Запобіжник: фалбек тільки якщо це ліміти, ключ є, і ми не на Gemini
               if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
                 console.warn(`⚠️ [ai] Провайдер ${r.provider} повернув 429 (Rate Limit). Автоматичний фалбек на Gemini...`);
                 
-                // Створюємо клієнт Gemini на льоту
                 const fallbackClient = new GeminiProvider(config.geminiModel);
                 const fallbackMethod = (fallbackClient as any)[propKey];
                 
-                // Виконуємо той самий метод з тими ж аргументами, але через Gemini
                 return await fallbackMethod.apply(fallbackClient, args);
               }
               
-              // Якщо це не 429 (наприклад, 401 або 500) - прокидаємо помилку далі
               throw error;
-            }
-          };
-        }
-        return origMethod;
-      }
-    }) as AIClient;
-  }
-  return singleton;
-}
