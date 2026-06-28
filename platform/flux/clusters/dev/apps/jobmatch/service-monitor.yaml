@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: jobmatch-api-monitor
+  namespace: jobmatch-dev
+  labels:
+    release: kube-prometheus-stack 
+spec:
+  selector:
+    matchLabels:
+      app: jobmatch-dev-api
+      app.kubernetes.io/instance: jobmatch-dev
+  endpoints:
+  - port: http 
+    path: /metrics
+    interval: 30s
