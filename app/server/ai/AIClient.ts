@@ -62,36 +62,42 @@ export function getAIClient(): AIClient {
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
         const origMethod = (target as any)[propKey];
+        // Якщо це функція (виклик до API)
         if (typeof origMethod === 'function') {
           return async function (...args: any[]) {
             try {
               return await origMethod.apply(target, args);
             } catch (error: any) {
-              console.error("DEBUG AI ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+              console.error("!!! AI ERROR DETECTED !!!", JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
-              const errorMessage = error?.message || "";
-              const errorCode = error?.status || error?.response?.status || 0;
+              const status = error?.status || error?.response?.status || error?.statusCode || 0;
+              const msg = (error?.message || "").toString();
               
-              const isRateLimit = errorCode === 429 || 
-                                  errorMessage.includes('429') || 
-                                  errorMessage.includes('quota');
+              const isRateLimit = status === 429 || 
+                                  msg.includes('429') || 
+                                  msg.includes('Too Many Requests') || 
+                                  msg.includes('quota');
 
               if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
-                console.warn(`⚠️ [ai] Провайдер ${r.provider} повернув 429. Автоматичний фалбек на Gemini...`);
-                
+                console.warn(`⚠️ [ai] Перехоплено 429. Перемикаю на Gemini!`);
                 const fallbackClient = new GeminiProvider(config.geminiModel);
-                const fallbackMethod = (fallbackClient as any)[propKey];
-                
-                return await fallbackMethod.apply(fallbackClient, args);
+                return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
               }
               
               throw error;
-            } 
-          }; 
-        } 
+            }
+          };
+        }
         return origMethod;
-      } 
-    }) as AIClient; 
-  } 
+      }
+    }) as AIClient;
+  }
   return singleton;
 }
+
+/** Reset client (tests or hot reload). */
+export function resetAIClient(): void {
+  singleton = null;
+}
+
+export { config as aiConfig };
