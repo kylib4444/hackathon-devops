@@ -16,8 +16,7 @@ import { register } from 'prom-client';
 const app = express();
 
 // @ts-ignore
-app.get('/metrics', async (req, res) => {
-  void req;
+app.get('/metrics', async (_req: any, res: any) => {
   try {
     res.set('Content-Type', register.contentType);
     res.send(await register.metrics());
