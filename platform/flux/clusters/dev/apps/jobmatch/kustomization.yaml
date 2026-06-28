@@ -17,6 +17,7 @@ resources:
   - prometheus-rbac.yaml
   - grafana-repo.yaml 
   - observability-routes.yaml
+  - service-monitor.yaml
 
 labels:
   - includeSelectors: true
