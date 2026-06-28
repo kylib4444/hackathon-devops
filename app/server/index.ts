@@ -10,8 +10,9 @@ import { loadJobBoardCatalog } from './agent/boards.js';
 import { webSearchBackend } from './agent/tools/web-search.js';
 import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
-import { register } from 'prom-client';
+import { register, collectDefaultMetrics } from 'prom-client';
 // import mcpRoutes from './routes/mcp.js';
+collectDefaultMetrics();
 const app = express();
 
 // @ts-ignore
