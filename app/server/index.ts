@@ -10,13 +10,18 @@ import { loadJobBoardCatalog } from './agent/boards.js';
 import { webSearchBackend } from './agent/tools/web-search.js';
 import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
-import { register, collectDefaultMetrics } from 'prom-client';
+import { register, collectDefaultMetrics, Counter } from 'prom-client';
 // import mcpRoutes from './routes/mcp.js';
+
+const testCounter = new Counter({
+  name: 'test_metric_total',
+  help: 'Це тестова метрика, щоб перевірити Prometheus',
+});
 
 try {
   collectDefaultMetrics({ register });
 } catch (e) {
-  console.error("Metrics already collected or error:", e);
+  console.error("Metrics init error:", e);
 }
 
 const app = express();
@@ -24,13 +29,13 @@ const app = express();
 // @ts-ignore
 app.get('/metrics', async (_req: any, res: any) => {
   try {
+    testCounter.inc(); 
     const metrics = await register.metrics();
-    console.log("DEBUG: Metrics length:", metrics.length); 
+    console.log("DEBUG: Raw metrics:", metrics); 
     res.set('Content-Type', register.contentType);
     res.send(metrics);
   } catch (ex) {
-    console.error("DEBUG: Metrics error:", ex); 
-    res.status(500).send(ex);
+    res.status(500).send(String(ex));
   }
 });
 
