@@ -12,7 +12,13 @@ import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
 import { register, collectDefaultMetrics } from 'prom-client';
 // import mcpRoutes from './routes/mcp.js';
-collectDefaultMetrics();
+
+try {
+  collectDefaultMetrics({ register });
+} catch (e) {
+  console.error("Metrics already collected or error:", e);
+}
+
 const app = express();
 
 // @ts-ignore
@@ -59,8 +65,8 @@ app.use('/api/jobs', jobsRoutes);
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
-app.listen(config.port, () => {
-  console.info(`[api] listening on http://localhost:${config.port}`);
+app.listen(config.port, '0.0.0.0', () => {
+  console.info(`[api] listening on http://0.0.0.0:${config.port}`);
   console.info(`[api] demo_mode=${config.demoMode}`);
   logDemoModeWarningIfNeeded();
 });
