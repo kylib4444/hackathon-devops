@@ -9,11 +9,12 @@ export class OpenAIProvider implements AIClient {
   readonly model: string;
   private readonly baseURL: string;
 
-  // Сигнатура конструктора відновлена для виправлення TS2554
-  constructor(model?: string) {
+  // Виправлено: конструктор тепер приймає 2 аргументи, щоб відповідати викликам
+  constructor(model?: string, baseURL?: string) {
     this.model = model ?? config.openaiModel;
     const gateway = process.env.GATEWAY_URL;
-    this.baseURL = (gateway || 'https://api.openai.com').replace(/\/v1$/, '');
+    // Пріоритет: GATEWAY_URL -> baseURL -> defaults
+    this.baseURL = (gateway || baseURL || 'https://api.openai.com').replace(/\/v1$/, '');
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
@@ -22,7 +23,6 @@ export class OpenAIProvider implements AIClient {
     try {
       const skills = buildSkillsSystemAppendix(request.task);
       const system = request.systemPrompt + skills + '\n\n' + schemaInstruction(request.jsonSchema);
-      
       const url = `${this.baseURL}/v1/chat/completions`;
 
       const res = await fetch(url, {
@@ -48,7 +48,6 @@ export class OpenAIProvider implements AIClient {
 
       const data = await res.json() as any;
       const text = data.choices?.[0]?.message?.content;
-
       if (!text) throw new Error('Empty response from Gateway');
 
       aiRequestCounter.labels(request.task, 'success').inc();

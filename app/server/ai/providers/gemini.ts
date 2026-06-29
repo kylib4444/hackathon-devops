@@ -9,11 +9,11 @@ export class GeminiProvider implements AIClient {
   readonly model: string;
   private readonly baseURL: string;
 
-  // Сигнатура конструктора відновлена для виправлення TS2554
-  constructor(model?: string) {
+  // Виправлено: конструктор тепер приймає 2 аргументи
+  constructor(model?: string, baseURL?: string) {
     this.model = model ?? config.geminiModel;
     const gateway = process.env.GATEWAY_URL;
-    this.baseURL = (gateway || 'https://generativelanguage.googleapis.com').replace(/\/v1beta$/, '');
+    this.baseURL = (gateway || baseURL || 'https://generativelanguage.googleapis.com').replace(/\/v1beta$/, '');
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
@@ -22,7 +22,6 @@ export class GeminiProvider implements AIClient {
     try {
       const skills = buildSkillsSystemAppendix(request.task);
       const system = request.systemPrompt + skills + '\n\n' + schemaInstruction(request.jsonSchema);
-      
       const url = `${this.baseURL}/v1beta/models/${this.model}:generateContent`;
 
       const res = await fetch(url, {
@@ -32,9 +31,7 @@ export class GeminiProvider implements AIClient {
           'x-goog-api-key': config.geminiApiKey,
         },
         body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: system + '\n\n' + request.userPrompt }] }
-          ],
+          contents: [{ role: 'user', parts: [{ text: system + '\n\n' + request.userPrompt }] }],
           generationConfig: { responseMimeType: 'application/json' }
         }),
       });
@@ -46,7 +43,6 @@ export class GeminiProvider implements AIClient {
 
       const data = await res.json() as any;
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
       if (!text) throw new Error('Empty response from Gateway');
 
       aiRequestCounter.labels(request.task, 'success').inc();
