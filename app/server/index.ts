@@ -11,13 +11,8 @@ import { webSearchBackend } from './agent/tools/web-search.js';
 import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
 import { register, collectDefaultMetrics, Counter } from 'prom-client';
-// import mcpRoutes from './routes/mcp.js';
 
-export const llmTokensCounter = new Counter({
-  name: 'jobmatch_llm_tokens_total',
-  help: 'Total number of LLM tokens consumed',
-  labelNames: ['model', 'token_type']
-});
+// Видалено дублюючу реєстрацію llmTokensCounter, яка викликала CrashLoopBackOff
 
 const testCounter = new Counter({
   name: 'test_metric_total',
@@ -32,12 +27,10 @@ try {
 
 const app = express();
 
-// @ts-ignore
 app.get('/metrics', async (_req: any, res: any) => {
   try {
     testCounter.inc(); 
     const metrics = await register.metrics();
-    console.log("DEBUG: Raw metrics:", metrics); 
     res.set('Content-Type', register.contentType);
     res.send(metrics);
   } catch (ex) {
@@ -72,7 +65,6 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/files', filesRoutes);
 app.use('/api/cv', filesRoutes);
 app.use('/api/jobs', jobsRoutes);
-// app.use('/mcp', mcpRoutes);
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
