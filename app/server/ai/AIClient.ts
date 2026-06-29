@@ -8,13 +8,14 @@ import type { AIClient } from './types.js';
 import { logDemoModeWarningIfNeeded } from './demo-notice.js';
 import { llmTokens, llmFailovers } from './metrics.js';
 
-export function createAIClient(): AIClient {
+function createAIClient(): AIClient {
   const resolved = resolveLlmConfig();
   if (resolved.demoMode || resolved.provider === 'demo') {
     logDemoModeWarningIfNeeded();
     return new DemoAIClient();
   }
 
+  // Gateway URL logic as per HLD (AgentGateway integration)
   if (process.env.GATEWAY_URL) {
     const gatewayBaseURL = process.env.GATEWAY_URL.endsWith('/v1')
       ? process.env.GATEWAY_URL
@@ -39,43 +40,34 @@ export function getAIClient(): AIClient {
     const primaryClient = createAIClient();
     const r = resolveLlmConfig();
 
+    // Proxy для FinOps-роутингу та збору метрик
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
-        // Отримуємо оригінальний метод
         const origMethod = (target as any)[propKey];
-        
-        // Якщо це не функція (наприклад, властивість provider), просто повертаємо її
         if (typeof origMethod !== 'function') return origMethod;
 
-        // Повертаємо обгортку (Proxy) для методу
         return async function (...args: any[]) {
-          const is429 = (val: any) => {
-            const s = JSON.stringify(val || "").toLowerCase();
-            return s.includes('429') || s.includes('quota') || s.includes('rate limit');
-          };
-
           try {
             const result = await origMethod.apply(target, args);
             
-            // Якщо все добре, інкрементуємо токени, якщо вони є у відповіді
+            // Інкремент успішних токенів
             if (result?.usage?.total_tokens) {
-                 llmTokens.inc({ model: r.model, token_type: 'total' }, result.usage.total_tokens);
+                 llmTokens.inc({ model: r.model || 'unknown', token_type: 'total' }, result.usage.total_tokens);
             }
             return result;
           } catch (error: any) {
              const msg = (error?.message || "").toString();
-             const isRateLimit = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit');
+             const isRateLimit = msg.includes('429') || msg.includes('quota');
 
-             // Логіка перемикання при помилці
+             // FinOps Failover
              if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
                 llmFailovers.inc({ from: r.provider, to: 'gemini' });
                 
                 const fallbackClient = new GeminiProvider(config.geminiModel);
                 const result = await (fallbackClient as any)[propKey].apply(fallbackClient, args);
                 
-                // Інкрементуємо метрику для fallback-результату
                 if (result?.usage?.total_tokens) {
-                    llmTokens.inc({ model: config.geminiModel, token_type: 'total' }, result.usage.total_tokens);
+                    llmTokens.inc({ model: config.geminiModel || 'gemini', token_type: 'total' }, result.usage.total_tokens);
                 }
                 return result;
              }
@@ -87,5 +79,3 @@ export function getAIClient(): AIClient {
   }
   return singleton;
 }
-
-export { config as aiConfig };

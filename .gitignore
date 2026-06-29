@@ -56,3 +56,5 @@ doc/drafts
 
 # Flux keys
 flux-deploy-key*
+dist/
+node_modules/

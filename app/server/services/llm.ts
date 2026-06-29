@@ -3,7 +3,7 @@ import { getAIClient } from '../ai/AIClient.js';
 import { selectSkillsForTask } from '../ai/skills/loader.js';
 import type { CvExtractionResult, JobMatchResult } from '../types.js';
 import { runJobSearchAgent } from '../agent/JobSearchAgent.js';
-import { llmTokens } from '../ai/metrics.js'; // ВИПРАВЛЕНО: імпорт з правильного місця
+import { llmTokens } from '../ai/metrics.js';
 
 const JOB_SYSTEM =
   'You are an expert career advisor. (Demo mode — sample listings only.)';
