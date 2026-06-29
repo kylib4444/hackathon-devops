@@ -6,7 +6,7 @@ import { GeminiProvider } from './providers/gemini.js';
 import { ClaudeProvider } from './providers/claude.js';
 import type { AIClient } from './types.js';
 import { logDemoModeWarningIfNeeded } from './demo-notice.js';
-import { llmRequests, llmFailovers } from './metrics.js';
+import { llmTokens, llmFailovers } from './metrics.js';
 
 export function createAIClient(): AIClient {
   const resolved = resolveLlmConfig();
@@ -38,15 +38,17 @@ export function getAIClient(): AIClient {
   if (!singleton) {
     const primaryClient = createAIClient();
     const r = resolveLlmConfig();
-    console.info(`[ai] Initializing Proxy for provider: ${r.provider}`);
 
     singleton = new Proxy(primaryClient, {
       get(target, propKey) {
+        // Отримуємо оригінальний метод
         const origMethod = (target as any)[propKey];
+        
+        // Якщо це не функція (наприклад, властивість provider), просто повертаємо її
         if (typeof origMethod !== 'function') return origMethod;
 
+        // Повертаємо обгортку (Proxy) для методу
         return async function (...args: any[]) {
-          // Допоміжна функція для перевірки 429
           const is429 = (val: any) => {
             const s = JSON.stringify(val || "").toLowerCase();
             return s.includes('429') || s.includes('quota') || s.includes('rate limit');
@@ -55,37 +57,29 @@ export function getAIClient(): AIClient {
           try {
             const result = await origMethod.apply(target, args);
             
-            // Якщо API повернуло 429 у відповіді (наприклад, JSON об'єкт)
-            if (is429(result) && config.geminiApiKey && r.provider !== 'gemini') {
-               console.warn(`⚠️ [ai] 429 detected in result. Fallback triggering.`);
-               llmFailovers.inc({ from: r.provider, to: 'gemini' });
-               
-               const fallbackClient = new GeminiProvider(config.geminiModel);
-               return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
+            // Якщо все добре, інкрементуємо токени, якщо вони є у відповіді
+            if (result?.usage?.total_tokens) {
+                 llmTokens.inc({ model: r.model, token_type: 'total' }, result.usage.total_tokens);
             }
-
-            // Успішний запит (без 429)
-            llmRequests.inc({ provider: r.provider, status: 'success' });
             return result;
           } catch (error: any) {
-              const msg = (error?.message || "").toString();
-              const isRateLimit = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit');
-              
-              // Логування для дебагу
-              console.error(`[Proxy] Caught error: ${msg}`);
-              
-              // Якщо це помилка 429 (Exception)
-              if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
-                console.warn(`⚠️ [ai] Перехоплено 429 (Exception). Перемикаю на Gemini!`);
+             const msg = (error?.message || "").toString();
+             const isRateLimit = msg.includes('429') || msg.includes('quota') || msg.includes('rate limit');
+
+             // Логіка перемикання при помилці
+             if (isRateLimit && config.geminiApiKey && r.provider !== 'gemini') {
                 llmFailovers.inc({ from: r.provider, to: 'gemini' });
                 
                 const fallbackClient = new GeminiProvider(config.geminiModel);
-                return await (fallbackClient as any)[propKey].apply(fallbackClient, args);
-              }
-              
-              // Якщо інша помилка — фіксуємо її в метриках
-              llmRequests.inc({ provider: r.provider, status: 'error' });
-              throw error;
+                const result = await (fallbackClient as any)[propKey].apply(fallbackClient, args);
+                
+                // Інкрементуємо метрику для fallback-результату
+                if (result?.usage?.total_tokens) {
+                    llmTokens.inc({ model: config.geminiModel, token_type: 'total' }, result.usage.total_tokens);
+                }
+                return result;
+             }
+             throw error;
           }
         };
       }
