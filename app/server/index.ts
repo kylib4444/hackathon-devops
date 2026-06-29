@@ -44,7 +44,6 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     demoMode: config.demoMode,
-    demoMessage: config.demoMode ? 'No LLM API keys configured.' : null,
     llm: {
       provider: llm.provider,
       model: llm.model,
