@@ -9,15 +9,16 @@ export class OpenAIProvider implements AIClient {
   readonly model: string;
   private readonly baseURL: string;
 
-  constructor(model?: string, baseURL?: string) {
+  constructor(model?: string) {
     this.model = model ?? config.openaiModel;
     
-    // СУВОРИЙ МАРШРУТ: Завжди йдемо через Gateway, якщо він є.
+    // ПРИМУСОВИЙ МАРШРУТ: Використовуємо GATEWAY_URL як базовий URL
+    // Це змусить клієнт йти в шлюз, а не в api.openai.com
     const gateway = process.env.GATEWAY_URL;
-    const base = gateway || baseURL || 'https://api.openai.com';
-    
-    // Відрізаємо /v1 на кінці, якщо він там є, щоб не дублювати
-    this.baseURL = base.replace(/\/v1$/, '');
+    if (!gateway) {
+      console.warn("⚠️ GATEWAY_URL не задано! Запити підуть напряму в OpenAI.");
+    }
+    this.baseURL = (gateway || 'https://api.openai.com').replace(/\/v1$/, '');
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
@@ -29,11 +30,12 @@ export class OpenAIProvider implements AIClient {
       
       const url = `${this.baseURL}/v1/chat/completions`;
 
-      // Використовуємо чистий fetch замість SDK, щоб уникнути конфліктів зі шлюзом
+      // Використовуємо fetch, щоб обійти обмеження SDK та мати повний контроль над URL
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // Важливо: передаємо ключ. Шлюз повинен його прийняти і авторизуватись далі
           'Authorization': `Bearer ${config.openaiApiKey}`,
         },
         body: JSON.stringify({
@@ -42,7 +44,6 @@ export class OpenAIProvider implements AIClient {
             { role: 'system', content: system },
             { role: 'user', content: request.userPrompt },
           ],
-          // Якщо Gateway все ще буде видавати 400, спробуй закоментувати наступний рядок:
           response_format: { type: 'json_object' },
         }),
       });
