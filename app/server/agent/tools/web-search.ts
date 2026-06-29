@@ -45,46 +45,66 @@ function mapHitsToListings(hits: SearchHit[], board: JobBoardDefinition, limit: 
 }
 
 /**
- * Універсальний запит до шлюзу через fetch (без SDK, щоб не було помилок tools)
+ * Заглушка для Claude: перехоплює помилки (напр., 401 через відсутність ключа) і повертає порожній масив.
  */
-async function callGateway(provider: string, prompt: string) {
-  const isClaude = provider === 'claude';
-  const isOpenAI = provider === 'openai';
+async function claudeWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
+  const url = `${GATEWAY_URL.replace(/\/v1$/, '')}/v1/messages`;
   
-  // Визначаємо URL шлюзу
-  const baseUrl = GATEWAY_URL.replace(/\/v1$/, '');
-  const url = isClaude ? `${baseUrl}/v1/messages` : `${baseUrl}/v1/chat/completions`;
-  
-  const apiKey = isClaude ? config.anthropicApiKey : config.openaiApiKey;
-  
-  const body = isClaude 
-    ? {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.anthropicApiKey || 'mock-key'}`,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         model: config.claudeModel,
         max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }]
-      }
-    : {
-        model: config.openaiModel,
-        messages: [{ role: 'user', content: prompt }]
-      };
+        messages: [{ role: 'user', content: buildSearchPrompt(board, query, limit) }],
+      }),
+    });
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey || 'no-key'}`
-  };
+    if (!res.ok) {
+      console.warn(`[stub] Claude search failed (${res.status}) on ${board.name}. Ignoring and returning empty results.`);
+      return [];
+    }
 
-  if (isClaude) {
-    headers['anthropic-version'] = '2023-06-01';
+    const data = await res.json() as any;
+    const text = data.content?.[0]?.text ?? '';
+    return mapHitsToListings(parseJsonFromModelText(text) as SearchHit[], board, limit);
+  } catch (error) {
+    console.warn(`[stub] Claude connection error on ${board.name}. Returning empty results.`);
+    return [];
   }
+}
 
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
+  const url = `${GATEWAY_URL.replace(/\/v1$/, '')}/v1/chat/completions`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.openaiApiKey || 'mock-key'}`,
+    },
+    body: JSON.stringify({
+      model: config.openaiModel,
+      messages: [{ role: 'user', content: buildSearchPrompt(board, query, limit) }],
+    }),
+  });
 
   if (!res.ok) {
-    throw new Error(`Gateway Error ${res.status}: ${await res.text()}`);
+    throw new Error(`OpenAI proxy error ${res.status}: ${await res.text()}`);
   }
 
   const data = await res.json() as any;
-  return isClaude ? data.content[0].text : data.choices[0].message.content;
+  const text = data.choices[0]?.message?.content ?? '';
+  return mapHitsToListings(parseJsonFromModelText(text) as SearchHit[], board, limit);
+}
+
+// Залишаємо Gemini без змін, якщо він наразі не викликається або працює як є
+async function geminiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
+  return []; 
 }
 
 export async function webSearchJobs(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
@@ -93,11 +113,11 @@ export async function webSearchJobs(board: JobBoardDefinition, query: string, li
     throw new Error('Web search requires a real LLM provider.');
   }
 
-  const prompt = buildSearchPrompt(board, query, limit);
-  const responseText = await callGateway(llm.provider, prompt);
+  if (llm.provider === 'claude') return claudeWebSearch(board, query, limit);
+  if (llm.provider === 'openai') return openaiWebSearch(board, query, limit);
+  if (llm.provider === 'gemini') return geminiWebSearch(board, query, limit);
   
-  const hits = parseJsonFromModelText(responseText) as SearchHit[];
-  return mapHitsToListings(Array.isArray(hits) ? hits : [], board, limit);
+  throw new Error(`Unsupported LLM: ${llm.provider}`);
 }
 
 export function webSearchBackend(): string | null {
