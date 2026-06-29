@@ -26,7 +26,10 @@ spec:
         tag: "latest"
         pullPolicy: Always
       env:
-        LLM_PROVIDER: "auto"
+        # Перемикаємо на openai, оскільки це єдиний робочий ключ
+        LLM_PROVIDER: "openai"
+        # Вказуємо шлях до нашого Kgateway
+        GATEWAY_URL: "http://agentgateway-external.agentgateway-system.svc.cluster.local"
     web:
       replicaCount: 1
       service:
