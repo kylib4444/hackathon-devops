@@ -19,6 +19,7 @@ resources:
   - service-monitor.yaml
   - gateway-secrets.yaml
   - gateway-auth-secret.yaml
+  - llm-secrets-es.yaml
   
 labels:
   - includeSelectors: true
