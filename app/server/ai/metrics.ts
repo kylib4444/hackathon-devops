@@ -15,5 +15,5 @@ export const llmFailovers = new client.Counter({
 export const llmTokens = new client.Counter({
   name: 'jobmatch_llm_tokens_total',
   help: 'Total number of LLM tokens consumed',
-  labelNames: ['provider']
+  labelNames: ['model', 'token_type'] 
 });
