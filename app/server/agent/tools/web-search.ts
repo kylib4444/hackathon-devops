@@ -1,9 +1,8 @@
 import { config } from '../../config.js';
-import { resolveLlmConfig } from '../../ai/resolve.js';
 import { parseJsonFromModelText } from '../../ai/json.js';
+import { resolveLlmConfig } from '../../ai/resolve.js';
 import type { JobBoardDefinition, RawJobListing } from '../types.js';
 
-// Прямий виклик до шлюзу
 const GATEWAY_URL = process.env.GATEWAY_URL || 'https://api.anthropic.com';
 
 interface SearchHit {
@@ -46,14 +45,16 @@ function mapHitsToListings(hits: SearchHit[], board: JobBoardDefinition, limit: 
 }
 
 /**
- * Універсальна функція для запиту до LLM через шлюз
+ * Універсальний запит до шлюзу через fetch (без SDK, щоб не було помилок tools)
  */
 async function callGateway(provider: string, prompt: string) {
   const isClaude = provider === 'claude';
-  const url = isClaude 
-    ? `${GATEWAY_URL.replace(/\/v1$/, '')}/v1/messages`
-    : `${GATEWAY_URL.replace(/\/v1$/, '')}/v1/chat/completions`;
-
+  const isOpenAI = provider === 'openai';
+  
+  // Визначаємо URL шлюзу
+  const baseUrl = GATEWAY_URL.replace(/\/v1$/, '');
+  const url = isClaude ? `${baseUrl}/v1/messages` : `${baseUrl}/v1/chat/completions`;
+  
   const apiKey = isClaude ? config.anthropicApiKey : config.openaiApiKey;
   
   const body = isClaude 
@@ -69,11 +70,10 @@ async function callGateway(provider: string, prompt: string) {
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`
+    'Authorization': `Bearer ${apiKey || 'no-key'}`
   };
 
   if (isClaude) {
-    headers['x-api-key'] = apiKey;
     headers['anthropic-version'] = '2023-06-01';
   }
 
@@ -101,5 +101,5 @@ export async function webSearchJobs(board: JobBoardDefinition, query: string, li
 }
 
 export function webSearchBackend(): string | null {
-  return null; 
+  return null;
 }
