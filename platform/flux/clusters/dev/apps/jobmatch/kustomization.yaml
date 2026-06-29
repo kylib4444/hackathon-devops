@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
   - ns.yaml
   - helm-release.yaml
-  - external-secret.yaml
   - cluster-secret-store.yaml
   - agentgateway-config.yaml
   - mcp-server.yaml
