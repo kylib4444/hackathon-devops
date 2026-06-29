@@ -5,21 +5,21 @@ metadata:
   namespace: agentgateway-system
 spec:
   ai:
-    # Failover спрацює, якщо провайдер поверне помилку (4xx/5xx)
-    strategy: Failover 
+    # Видалили 'strategy', бо кластер його не підтримує
     groups:
       - providers:
-          # Основний провайдер (перша спроба)
+          # Основний провайдер
           - name: openai-gpt
             openai:
               model: gpt-4o-mini
             policies:
               auth:
                 secretRef:
+                  # Видалили 'key', припускаємо, що система очікує 
+                  # ключ 'api-key' всередині цього секрету
                   name: llm-secrets
-                  key: openai-api-key
           
-          # Фейловер 1: Gemini Flash (якщо OpenAI впав або 429)
+          # Фейловер 1: Gemini
           - name: gemini-flash
             gemini:
               model: gemini-1.5-flash
@@ -27,9 +27,8 @@ spec:
               auth:
                 secretRef:
                   name: llm-secrets
-                  key: gemini-api-key
 
-          # Фейловер 2: Gemini Pro (остання спроба)
+          # Фейловер 2: Gemini Pro
           - name: gemini-pro
             gemini:
               model: gemini-1.5-pro
@@ -37,4 +36,3 @@ spec:
               auth:
                 secretRef:
                   name: llm-secrets
-                  key: gemini-api-key
