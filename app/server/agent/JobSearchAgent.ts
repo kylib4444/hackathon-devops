@@ -6,6 +6,7 @@ import type { AgentToolCallLog, JobSearchAgentInput, RawJobListing } from './typ
 import { fetchJobBoard } from './tools/fetch-board.js';
 import { webSearchJobs } from './tools/web-search.js';
 import { rankListingsWithLlm } from './synthesize.js';
+import { getCachedQuery, setCachedQuery, connectCache } from '../services/cache.js';
 
 const MAX_BOARDS_PER_SEARCH = 12;
 
@@ -79,6 +80,17 @@ export async function runJobSearchAgent(
   input: JobSearchAgentInput
 ): Promise<JobMatchResult & { agentMeta?: { toolCalls: AgentToolCallLog[]; boardsQueried: number; listingsFound: number } }> {
   assertJobSearchReady();
+  await connectCache();
+
+  // Використовуємо явну типізацію (type assertion), щоб TypeScript розумів структуру даних з Redis
+  const cached = await getCachedQuery(input.query, input.countryCode) as (JobMatchResult & { 
+    agentMeta: { toolCalls: AgentToolCallLog[]; boardsQueried: number; listingsFound: number } 
+  }) | null;
+
+  if (cached) {
+    console.info(`[agent] Cache hit for query="${input.query}" country=${input.countryCode}`);
+    return cached;
+  }
 
   const boards = selectBoardsForCountry(
     input.countryCode,
@@ -126,7 +138,7 @@ export async function runJobSearchAgent(
     jsonSchema: input.jsonSchema,
   });
 
-  return {
+  const response = {
     ...ranked,
     agentMeta: {
       toolCalls: logs,
@@ -134,6 +146,11 @@ export async function runJobSearchAgent(
       listingsFound: merged.length,
     },
   };
+
+  // Зберігаємо результат у кеш
+  await setCachedQuery(input.query, input.countryCode, response);
+
+  return response;
 }
 
 export async function searchRawJobs(
