@@ -12,8 +12,6 @@ import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
 import { register, collectDefaultMetrics, Counter } from 'prom-client';
 
-// Видалено дублюючу реєстрацію llmTokensCounter, яка викликала CrashLoopBackOff
-
 const testCounter = new Counter({
   name: 'test_metric_total',
   help: 'this is test metric to check Prometheus',
@@ -46,9 +44,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     demoMode: config.demoMode,
-    demoMessage: config.demoMode
-      ? 'No LLM API keys configured. Set OPENAI_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY for AI features.'
-      : null,
+    demoMessage: config.demoMode ? 'No LLM API keys configured.' : null,
     llm: {
       provider: llm.provider,
       model: llm.model,
@@ -70,6 +66,5 @@ fs.mkdirSync(config.uploadDir, { recursive: true });
 
 app.listen(config.port, '0.0.0.0', () => {
   console.info(`[api] listening on http://0.0.0.0:${config.port}`);
-  console.info(`[api] demo_mode=${config.demoMode}`);
   logDemoModeWarningIfNeeded();
 });
