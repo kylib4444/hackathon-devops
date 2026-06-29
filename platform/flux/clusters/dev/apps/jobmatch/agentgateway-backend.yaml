@@ -5,19 +5,37 @@ metadata:
   namespace: agentgateway-system
 spec:
   ai:
+    # Стратегія Failover працює як ланцюжок: 
+    # якщо перший провайдер повертає 4xx/5xx, перемикаємося на наступний
+    strategy: Failover 
     groups:
       - providers:
-          - name: claude-haiku
-            anthropic:
-              model: claude-haiku-4-5
+          # Рівень 1: OpenAI
+          - name: openai-gpt
+            openai:
+              model: gpt-4o-mini
             policies:
               auth:
                 secretRef:
-                  name: claude-auth-secret
+                  name: llm-secrets
+                  key: openai-api-key
+          
+          # Рівень 2: Gemini Flash (швидкий, для пошуку/матчингу)
           - name: gemini-flash
             gemini:
-              model: gemini-3.5-flash
+              model: gemini-1.5-flash
             policies:
               auth:
                 secretRef:
-                  name: gemini-auth-secret
+                  name: llm-secrets
+                  key: gemini-api-key
+          
+          # Рівень 3: Gemini Pro (більш інтелектуальний, як "остання лінія оборони")
+          - name: gemini-pro
+            gemini:
+              model: gemini-1.5-pro
+            policies:
+              auth:
+                secretRef:
+                  name: llm-secrets
+                  key: gemini-api-key
