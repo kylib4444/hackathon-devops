@@ -5,6 +5,11 @@ import { parseJsonFromModelText } from '../../ai/json.js';
 import { resolveLlmConfig } from '../../ai/resolve.js';
 import type { JobBoardDefinition, RawJobListing } from '../types.js';
 
+// Helper для отримання базового URL шлюзу
+const getGatewayBaseURL = () => process.env.GATEWAY_URL 
+  ? (process.env.GATEWAY_URL.endsWith('/v1') ? process.env.GATEWAY_URL : `${process.env.GATEWAY_URL}/v1`)
+  : undefined;
+
 interface SearchHit {
   title?: string;
   applyUrl?: string;
@@ -40,11 +45,7 @@ Rules:
 - No markdown fences or commentary`;
 }
 
-function mapHitsToListings(
-  hits: SearchHit[],
-  board: JobBoardDefinition,
-  limit: number
-): RawJobListing[] {
+function mapHitsToListings(hits: SearchHit[], board: JobBoardDefinition, limit: number): RawJobListing[] {
   const out: RawJobListing[] = [];
   const seen = new Set<string>();
 
@@ -68,7 +69,6 @@ function mapHitsToListings(
       snippet: hit.snippet,
     });
   }
-
   return out;
 }
 
@@ -83,11 +83,7 @@ function parseSearchHits(text: string): SearchHit[] {
   return [];
 }
 
-async function geminiWebSearch(
-  board: JobBoardDefinition,
-  query: string,
-  limit: number
-): Promise<RawJobListing[]> {
+async function geminiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
   const client = new GoogleGenAI({ apiKey: config.geminiApiKey });
   const prompt = buildSearchPrompt(board, query, limit);
 
@@ -103,35 +99,27 @@ async function geminiWebSearch(
 
   const text = response.text ?? '';
   const hits = parseSearchHits(text);
-
   const candidate = response.candidates?.[0];
   const chunks = candidate?.groundingMetadata?.groundingChunks ?? [];
   for (const chunk of chunks) {
     const web = chunk.web;
     if (!web?.uri || !web.title) continue;
-    hits.push({
-      title: web.title,
-      applyUrl: web.uri,
-      company: 'See listing',
-      snippet: web.title,
-    });
+    hits.push({ title: web.title, applyUrl: web.uri, company: 'See listing', snippet: web.title });
   }
-
   return mapHitsToListings(hits, board, limit);
 }
 
-async function openaiWebSearch(
-  board: JobBoardDefinition,
-  query: string,
-  limit: number
-): Promise<RawJobListing[]> {
+async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
   const prompt = buildSearchPrompt(board, query, limit);
-  const res = await fetch('https://api.openai.com/v1/responses', {
+  // ВИПРАВЛЕНО: Використовуємо Gateway URL
+  const baseUrl = process.env.GATEWAY_URL || 'https://api.openai.com';
+  const url = `${baseUrl}/v1/responses`;
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${config.openaiApiKey}`,
+      Authorization: `Bearer ${config.openaiApiKey || 'mock-key'}`,
       'Content-Type': 'application/json',
-      'Accept-Encoding': 'identity',
     },
     body: JSON.stringify({
       model: config.openaiModel,
@@ -145,30 +133,18 @@ async function openaiWebSearch(
     throw new Error(`OpenAI web search error ${res.status}: ${body.slice(0, 200)}`);
   }
 
-  const data = (await res.json()) as {
-    output_text?: string;
-    output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
-  };
-
+  const data = (await res.json()) as any;
   let text = data.output_text ?? '';
-  if (!text && Array.isArray(data.output)) {
-    for (const item of data.output) {
-      if (item.type !== 'message' || !Array.isArray(item.content)) continue;
-      for (const part of item.content) {
-        if (part.type === 'output_text' && part.text) text += part.text;
-      }
-    }
-  }
-
   return mapHitsToListings(parseSearchHits(text), board, limit);
 }
 
-async function claudeWebSearch(
-  board: JobBoardDefinition,
-  query: string,
-  limit: number
-): Promise<RawJobListing[]> {
-  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+async function claudeWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
+  // ВИПРАВЛЕНО: Використовуємо Gateway URL через baseURL
+  const client = new Anthropic({ 
+    apiKey: config.anthropicApiKey || 'no-key',
+    baseURL: getGatewayBaseURL() 
+  });
+  
   const prompt = buildSearchPrompt(board, query, limit);
 
   const message = await client.messages.create({
@@ -188,51 +164,29 @@ async function claudeWebSearch(
   const hits: SearchHit[] = [];
 
   for (const block of message.content) {
-    if (block.type === 'text') {
-      text += block.text;
-    }
+    if (block.type === 'text') text += block.text;
   }
 
   hits.push(...parseSearchHits(text));
   return mapHitsToListings(hits, board, limit);
 }
 
-export async function webSearchJobs(
-  board: JobBoardDefinition,
-  query: string,
-  limit: number
-): Promise<RawJobListing[]> {
+export async function webSearchJobs(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
   const llm = resolveLlmConfig();
   if (llm.demoMode || llm.provider === 'demo') {
-    throw new Error('Web search requires a real LLM provider with native search (Gemini, OpenAI, or Claude).');
+    throw new Error('Web search requires a real LLM provider.');
   }
 
   switch (llm.provider) {
-    case 'gemini':
-      if (!config.geminiApiKey) throw new Error('GEMINI_API_KEY is required for Gemini web search.');
-      return geminiWebSearch(board, query, limit);
-    case 'openai':
-      if (!config.openaiApiKey) throw new Error('OPENAI_API_KEY is required for OpenAI web search.');
-      return openaiWebSearch(board, query, limit);
-    case 'claude':
-      if (!config.anthropicApiKey) throw new Error('ANTHROPIC_API_KEY is required for Claude web search.');
-      return claudeWebSearch(board, query, limit);
-    default:
-      throw new Error(`Unsupported LLM provider for web search: ${llm.provider}`);
+    case 'gemini': return geminiWebSearch(board, query, limit);
+    case 'openai': return openaiWebSearch(board, query, limit);
+    case 'claude': return claudeWebSearch(board, query, limit);
+    default: throw new Error(`Unsupported LLM: ${llm.provider}`);
   }
 }
 
 export function webSearchBackend(): string | null {
   const llm = resolveLlmConfig();
   if (llm.demoMode) return null;
-  switch (llm.provider) {
-    case 'gemini':
-      return 'gemini-google-search';
-    case 'openai':
-      return 'openai-web-search';
-    case 'claude':
-      return 'claude-web-search';
-    default:
-      return null;
-  }
+  return `${llm.provider}-web-search`;
 }
