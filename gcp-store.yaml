@@ -1,0 +1,13 @@
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: gcp-store
+  namespace: jobmatch-dev
+spec:
+  provider:
+    gcpsm:
+      projectID: "des-job-searcher"
+      auth:
+        workloadIdentity:
+          serviceAccountRef:
+            name: eso-ksa

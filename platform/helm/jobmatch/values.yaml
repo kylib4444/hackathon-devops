@@ -15,6 +15,21 @@ api:
   env:
     LLM_PROVIDER: "auto"
     SKILLS_DIR: "/app/skills"
+    OPENAI_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: llm-secrets
+          key: openai-api-key
+    GEMINI_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: llm-secrets
+          key: gemini-api-key
+    CLAUDE_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: llm-secrets
+          key: claude-api-key
 
 # Web Service Configuration (Frontend)
 web:

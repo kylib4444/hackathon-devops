@@ -1,0 +1,18 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-for-simple-task
+  namespace: agentgateway-system
+  labels:
+    environment: development
+spec:
+  ai:
+    groups:
+    - providers:
+      - openai:
+          model: gpt-4o-mini
+        name: openai-simple
+        policies:
+          auth:
+            secretRef:
+              name: openai-auth-secret
