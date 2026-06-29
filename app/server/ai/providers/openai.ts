@@ -12,12 +12,8 @@ export class OpenAIProvider implements AIClient {
   constructor(model?: string) {
     this.model = model ?? config.openaiModel;
     
-    // ПРИМУСОВИЙ МАРШРУТ: Використовуємо GATEWAY_URL як базовий URL
-    // Це змусить клієнт йти в шлюз, а не в api.openai.com
+    // ВИПРАВЛЕНО: Примусово беремо шлюз, якщо він заданий
     const gateway = process.env.GATEWAY_URL;
-    if (!gateway) {
-      console.warn("⚠️ GATEWAY_URL не задано! Запити підуть напряму в OpenAI.");
-    }
     this.baseURL = (gateway || 'https://api.openai.com').replace(/\/v1$/, '');
   }
 
@@ -30,12 +26,10 @@ export class OpenAIProvider implements AIClient {
       
       const url = `${this.baseURL}/v1/chat/completions`;
 
-      // Використовуємо fetch, щоб обійти обмеження SDK та мати повний контроль над URL
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Важливо: передаємо ключ. Шлюз повинен його прийняти і авторизуватись далі
           'Authorization': `Bearer ${config.openaiApiKey}`,
         },
         body: JSON.stringify({

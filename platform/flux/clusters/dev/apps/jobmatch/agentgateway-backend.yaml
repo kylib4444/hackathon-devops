@@ -5,12 +5,11 @@ metadata:
   namespace: agentgateway-system
 spec:
   ai:
-    # Стратегія Failover працює як ланцюжок: 
-    # якщо перший провайдер повертає 4xx/5xx, перемикаємося на наступний
+    # Failover спрацює, якщо провайдер поверне помилку (4xx/5xx)
     strategy: Failover 
     groups:
       - providers:
-          # Рівень 1: OpenAI
+          # Основний провайдер (перша спроба)
           - name: openai-gpt
             openai:
               model: gpt-4o-mini
@@ -20,7 +19,7 @@ spec:
                   name: llm-secrets
                   key: openai-api-key
           
-          # Рівень 2: Gemini Flash (швидкий, для пошуку/матчингу)
+          # Фейловер 1: Gemini Flash (якщо OpenAI впав або 429)
           - name: gemini-flash
             gemini:
               model: gemini-1.5-flash
@@ -29,8 +28,8 @@ spec:
                 secretRef:
                   name: llm-secrets
                   key: gemini-api-key
-          
-          # Рівень 3: Gemini Pro (більш інтелектуальний, як "остання лінія оборони")
+
+          # Фейловер 2: Gemini Pro (остання спроба)
           - name: gemini-pro
             gemini:
               model: gemini-1.5-pro

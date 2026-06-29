@@ -35,19 +35,16 @@ function mapHitsToListings(hits: any[], board: JobBoardDefinition, limit: number
   return out;
 }
 
-/**
- * 🚧 ЗАГЛУШКА ДЛЯ CLAUDE: Ключа немає, повертаємо порожній масив.
- */
 async function claudeWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
   console.warn(`[stub] Claude is missing valid key. Returning empty results for ${board.name}.`);
   return [];
 }
 
-/**
- * ✅ ПРЯМИЙ ЗАПИТ ДЛЯ OPENAI: Йдемо на api.openai.com, оминаючи зламаний Gateway
- */
 async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
-  const url = `https://api.openai.com/v1/chat/completions`;
+  // ВИПРАВЛЕНО: Використовуємо GATEWAY_URL, якщо він є, для активації фейловеру
+  const baseUrl = process.env.GATEWAY_URL || 'https://api.openai.com';
+  const url = `${baseUrl}/v1/chat/completions`;
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -60,7 +57,11 @@ async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: 
     }),
   });
 
-  if (!res.ok) throw new Error(`OpenAI direct error ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`OpenAI/Gateway error ${res.status}: ${errorText}`);
+  }
+
   const data = await res.json() as any;
   const text = data.choices[0]?.message?.content ?? '';
   return mapHitsToListings(parseJsonFromModelText(text) as any[], board, limit);
@@ -75,7 +76,6 @@ export async function webSearchJobs(board: JobBoardDefinition, query: string, li
   if (llm.provider === 'claude') return claudeWebSearch(board, query, limit);
   if (llm.provider === 'openai') return openaiWebSearch(board, query, limit);
   
-  // Якщо вибрано Gemini, залишаємо заглушку, щоб не ламало пайплайн
   return [];
 }
 
