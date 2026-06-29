@@ -9,10 +9,9 @@ export class OpenAIProvider implements AIClient {
   readonly model: string;
   private readonly baseURL: string;
 
+  // Сигнатура конструктора відновлена для виправлення TS2554
   constructor(model?: string) {
     this.model = model ?? config.openaiModel;
-    
-    // ВИПРАВЛЕНО: Примусово беремо шлюз, якщо він заданий
     const gateway = process.env.GATEWAY_URL;
     this.baseURL = (gateway || 'https://api.openai.com').replace(/\/v1$/, '');
   }

@@ -18,6 +18,7 @@ resources:
   - grafana-repo.yaml 
   - observability-routes.yaml
   - service-monitor.yaml
+  - gateway-secrets.yaml
 
 labels:
   - includeSelectors: true

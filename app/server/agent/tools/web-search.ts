@@ -41,7 +41,6 @@ async function claudeWebSearch(board: JobBoardDefinition, query: string, limit: 
 }
 
 async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
-  // ВИПРАВЛЕНО: Використовуємо GATEWAY_URL, якщо він є, для активації фейловеру
   const baseUrl = process.env.GATEWAY_URL || 'https://api.openai.com';
   const url = `${baseUrl}/v1/chat/completions`;
 
