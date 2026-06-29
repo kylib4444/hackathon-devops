@@ -111,14 +111,13 @@ async function geminiWebSearch(board: JobBoardDefinition, query: string, limit: 
 
 async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
   const prompt = buildSearchPrompt(board, query, limit);
-  // ВИПРАВЛЕНО: Використовуємо Gateway URL
   const baseUrl = process.env.GATEWAY_URL || 'https://api.openai.com';
-  const url = `${baseUrl}/v1/responses`;
+  const url = `${baseUrl.replace(/\/v1$/, '')}/v1/responses`;
 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${config.openaiApiKey || 'mock-key'}`,
+      'Authorization': `Bearer ${config.openaiApiKey || 'mock-key'}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -139,36 +138,45 @@ async function openaiWebSearch(board: JobBoardDefinition, query: string, limit: 
 }
 
 async function claudeWebSearch(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
-  // ВИПРАВЛЕНО: Використовуємо Gateway URL через baseURL
-  const client = new Anthropic({ 
-    apiKey: config.anthropicApiKey || 'no-key',
-    baseURL: getGatewayBaseURL() 
-  });
-  
   const prompt = buildSearchPrompt(board, query, limit);
-
-  const message = await client.messages.create({
-    model: config.claudeModel,
-    max_tokens: 4096,
-    messages: [{ role: 'user', content: prompt }],
-    tools: [
-      {
-        type: 'web_search_20250305',
-        name: 'web_search',
-        max_uses: 3,
-      } as unknown as Anthropic.Messages.ToolUnion,
-    ],
+  const gatewayURL = process.env.GATEWAY_URL || 'https://api.anthropic.com';
+  const url = `${gatewayURL.replace(/\/v1$/, '')}/v1/messages`;
+  
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'x-api-key': config.anthropicApiKey || 'no-key',
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.claudeModel,
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [
+        {
+          type: 'web_search_20250305',
+          name: 'web_search',
+          max_uses: 3,
+        },
+      ],
+    }),
   });
 
-  let text = '';
-  const hits: SearchHit[] = [];
-
-  for (const block of message.content) {
-    if (block.type === 'text') text += block.text;
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Claude web search error ${res.status}: ${body.slice(0, 200)}`);
   }
 
-  hits.push(...parseSearchHits(text));
-  return mapHitsToListings(hits, board, limit);
+  const data = await res.json() as any;
+  let text = '';
+  if (data.content && Array.isArray(data.content)) {
+    for (const block of data.content) {
+      if (block.type === 'text') text += block.text;
+    }
+  }
+
+  return mapHitsToListings(parseSearchHits(text), board, limit);
 }
 
 export async function webSearchJobs(board: JobBoardDefinition, query: string, limit: number): Promise<RawJobListing[]> {
