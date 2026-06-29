@@ -19,7 +19,8 @@ resources:
   - observability-routes.yaml
   - service-monitor.yaml
   - gateway-secrets.yaml
-
+  - gateway-auth-secret.yaml
+  
 labels:
   - includeSelectors: true
     pairs:
