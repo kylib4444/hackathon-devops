@@ -9,10 +9,10 @@ export class GeminiProvider implements AIClient {
   readonly model: string;
   private readonly baseURL: string;
 
-  // Виправлено: конструктор тепер приймає 2 аргументи
   constructor(model?: string, baseURL?: string) {
     this.model = model ?? config.geminiModel;
     const gateway = process.env.GATEWAY_URL;
+    // Базовий URL для гейтвею
     this.baseURL = (gateway || baseURL || 'https://generativelanguage.googleapis.com').replace(/\/v1beta$/, '');
   }
 
@@ -22,17 +22,23 @@ export class GeminiProvider implements AIClient {
     try {
       const skills = buildSkillsSystemAppendix(request.task);
       const system = request.systemPrompt + skills + '\n\n' + schemaInstruction(request.jsonSchema);
-      const url = `${this.baseURL}/v1beta/models/${this.model}:generateContent`;
+      
+      // Використовуємо OpenAI-сумісний шлях для гейтвею
+      const url = `${this.baseURL}/v1/chat/completions`;
 
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': config.geminiApiKey,
+          'Authorization': `Bearer ${config.geminiApiKey}`,
         },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: system + '\n\n' + request.userPrompt }] }],
-          generationConfig: { responseMimeType: 'application/json' }
+          model: this.model,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: request.userPrompt },
+          ],
+          response_format: { type: 'json_object' },
         }),
       });
 
@@ -42,7 +48,7 @@ export class GeminiProvider implements AIClient {
       }
 
       const data = await res.json() as any;
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = data.choices[0]?.message?.content;
       if (!text) throw new Error('Empty response from Gateway');
 
       aiRequestCounter.labels(request.task, 'success').inc();
