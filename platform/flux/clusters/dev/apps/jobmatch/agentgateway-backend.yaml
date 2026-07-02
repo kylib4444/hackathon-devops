@@ -16,6 +16,7 @@ spec:
           auth:
             secretRef:
               name: claude-auth-secret
+              key: api-key
       - name: openai-fallback
         openai:
           model: gpt-4o
@@ -23,6 +24,7 @@ spec:
           auth:
             secretRef:
               name: openai-auth-secret
+              key: api-key
       - name: gemini-fallback
         gemini:
           model: gemini-1.5-pro
@@ -30,6 +32,7 @@ spec:
           auth:
             secretRef:
               name: gemini-auth-secret
+              key: api-key
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
@@ -49,6 +52,7 @@ spec:
           auth:
             secretRef:
               name: claude-auth-secret
+              key: api-key
       - name: openai-fallback-fast
         openai:
           model: gpt-4o-mini
@@ -56,6 +60,7 @@ spec:
           auth:
             secretRef:
               name: openai-auth-secret
+              key: api-key
       - name: gemini-fallback-fast
         gemini:
           model: gemini-1.5-flash
@@ -63,3 +68,4 @@ spec:
           auth:
             secretRef:
               name: gemini-auth-secret
+              key: api-key
