@@ -17,8 +17,6 @@ resources:
   - grafana-repo.yaml 
   - observability-routes.yaml
   - service-monitor.yaml
-  - gateway-secrets.yaml
-  - gateway-auth-secret.yaml
   - llm-external-secret.yaml
   
 labels:
