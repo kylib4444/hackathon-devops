@@ -35,7 +35,7 @@ spec:
               key: api-key
 ---
 apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayBackend
+kind: AgentgatewayBackendgit 
 metadata:
   name: llm-for-simple-task
   namespace: agentgateway-system
