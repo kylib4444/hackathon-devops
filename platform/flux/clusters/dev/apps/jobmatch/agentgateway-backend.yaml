@@ -3,36 +3,63 @@ kind: AgentgatewayBackend
 metadata:
   name: llm-for-complex-task
   namespace: agentgateway-system
+  labels:
+    environment: development
 spec:
   ai:
-    # Видалили 'strategy', бо кластер його не підтримує
     groups:
-      - providers:
-          # Основний провайдер
-          - name: openai-gpt
-            openai:
-              model: gpt-4o-mini
-            policies:
-              auth:
-                secretRef:
-                  # Видалили 'key', припускаємо, що система очікує 
-                  # ключ 'api-key' всередині цього секрету
-                  name: llm-secrets
-          
-          # Фейловер 1: Gemini
-          - name: gemini-flash
-            gemini:
-              model: gemini-1.5-flash
-            policies:
-              auth:
-                secretRef:
-                  name: llm-secrets
-
-          # Фейловер 2: Gemini Pro
-          - name: gemini-pro
-            gemini:
-              model: gemini-1.5-pro
-            policies:
-              auth:
-                secretRef:
-                  name: llm-secrets
+    - providers:
+      - name: claude-primary
+        anthropic:
+          model: claude-3-5-sonnet-20240620
+        policies:
+          auth:
+            secretRef:
+              name: claude-auth-secret
+      - name: openai-fallback
+        openai:
+          model: gpt-4o
+        policies:
+          auth:
+            secretRef:
+              name: openai-auth-secret
+      - name: gemini-fallback
+        gemini:
+          model: gemini-1.5-pro
+        policies:
+          auth:
+            secretRef:
+              name: gemini-auth-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-for-simple-task
+  namespace: agentgateway-system
+  labels:
+    environment: development
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: claude-primary-fast
+        anthropic:
+          model: claude-3-haiku-20240307
+        policies:
+          auth:
+            secretRef:
+              name: claude-auth-secret
+      - name: openai-fallback-fast
+        openai:
+          model: gpt-4o-mini
+        policies:
+          auth:
+            secretRef:
+              name: openai-auth-secret
+      - name: gemini-fallback-fast
+        gemini:
+          model: gemini-1.5-flash
+        policies:
+          auth:
+            secretRef:
+              name: gemini-auth-secret
