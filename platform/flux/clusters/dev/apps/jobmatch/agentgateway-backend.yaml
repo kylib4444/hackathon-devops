@@ -26,6 +26,7 @@ spec:
       - name: gemini-fallback
         gemini:
           model: gemini-1.5-pro
+          version: v1beta
         policies:
           auth:
             secretRef:
@@ -59,6 +60,7 @@ spec:
       - name: gemini-fallback-fast
         gemini:
           model: gemini-1.5-flash
+          version: v1beta
         policies:
           auth:
             secretRef:
