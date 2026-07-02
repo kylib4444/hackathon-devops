@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { resolveLlmConfig } from './resolve.js';
 import { DemoAIClient } from './providers/demo.js';
-import { OpenAIProvider } from './providers/openai.js';
+import { OpenAiProvider } from './providers/openai.js';
 import { GeminiProvider } from './providers/gemini.js';
 import { ClaudeProvider } from './providers/claude.js';
 import type { AIClient } from './types.js';
@@ -20,11 +20,11 @@ function createAIClient(): AIClient {
     const gatewayBaseURL = process.env.GATEWAY_URL.endsWith('/v1')
       ? process.env.GATEWAY_URL
       : `${process.env.GATEWAY_URL}/v1`;
-    return new OpenAIProvider(resolved.model, gatewayBaseURL);
+    return new OpenAiProvider(resolved.model, gatewayBaseURL);
   }
 
   switch (resolved.provider) {
-    case 'openai': return new OpenAIProvider(resolved.model);
+    case 'openai': return new OpenAiProvider(resolved.model);
     case 'gemini': return new GeminiProvider(resolved.model);
     case 'claude': return new ClaudeProvider(resolved.model);
     default:

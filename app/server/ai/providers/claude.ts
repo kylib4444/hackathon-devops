@@ -1,44 +1,60 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config.js';
 import { schemaInstruction, parseJsonFromModelText } from '../json.js';
 import { buildSkillsSystemAppendix } from '../skills/loader.js';
 import type { AIClient, LlmProviderId, StructuredGenerateRequest } from '../types.js';
+import { aiRequestCounter } from '../../metrics.js';
 
 export class ClaudeProvider implements AIClient {
   readonly provider: LlmProviderId = 'claude';
   readonly model: string;
-  private readonly client: Anthropic;
+  private readonly baseURL: string;
 
-  constructor(model?: string) {
+  constructor(model?: string, baseURL?: string) {
     this.model = model ?? config.claudeModel;
-
-    // Визначаємо baseURL, якщо є Gateway
-    const gatewayBaseURL = process.env.GATEWAY_URL 
-      ? (process.env.GATEWAY_URL.endsWith('/v1') ? process.env.GATEWAY_URL : `${process.env.GATEWAY_URL}/v1`)
-      : undefined;
-
-    this.client = new Anthropic({ 
-      apiKey: config.anthropicApiKey || 'no-key-needed-if-gateway-handles-auth',
-      baseURL: gatewayBaseURL // Anthropic SDK підтримує це
-    });
+    const gateway = process.env.GATEWAY_URL;
+    this.baseURL = (gateway || baseURL || 'http://agentgateway-external.agentgateway-system.svc.cluster.local');
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
-    const skills = buildSkillsSystemAppendix(request.task);
-    const system = request.systemPrompt + skills + '\n\n' + schemaInstruction(request.jsonSchema);
+    aiRequestCounter.labels(request.task, 'started').inc();
 
-    const message = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 8192,
-      system,
-      messages: [{ role: 'user', content: request.userPrompt }],
-    });
+    try {
+      const skills = buildSkillsSystemAppendix(request.task);
+      const system = request.systemPrompt + skills + '\n\n' + schemaInstruction(request.jsonSchema);
+      
+      const url = `${this.baseURL}/v1/messages`;
 
-    // РОЗВ'ЯЗАННЯ ПОМИЛКИ: Знаходимо саме текстовий блок
-    const textBlock = message.content.find((block): block is Anthropic.TextBlock => block.type === 'text');
-    const text = textBlock ? textBlock.text : '';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01'
+          // ВИДАЛЕНО: 'x-api-key': config.claudeApiKey
+        },
+        body: JSON.stringify({
+          model: this.model,
+          system: system,
+          messages: [
+            { role: 'user', content: request.userPrompt },
+          ],
+          max_tokens: 4096
+        }),
+      });
 
-    if (!text) throw new Error('Empty Claude response');
-    return parseJsonFromModelText<T>(text);
+      if (!res.ok) {
+        const errorBody = await res.text();
+        throw new Error(`Gateway/Claude Error ${res.status}: ${errorBody.slice(0, 300)}`);
+      }
+
+      const data = await res.json() as any;
+      const text = data.content?.[0]?.text;
+      if (!text) throw new Error('Empty response from Gateway');
+
+      aiRequestCounter.labels(request.task, 'success').inc();
+      return parseJsonFromModelText<T>(text);
+    } catch (err) {
+      aiRequestCounter.labels(request.task, 'error').inc();
+      throw err;
+    }
   }
 }

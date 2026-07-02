@@ -4,17 +4,16 @@ import { buildSkillsSystemAppendix } from '../skills/loader.js';
 import type { AIClient, LlmProviderId, StructuredGenerateRequest } from '../types.js';
 import { aiRequestCounter } from '../../metrics.js';
 
-export class OpenAIProvider implements AIClient {
+export class OpenAiProvider implements AIClient {
   readonly provider: LlmProviderId = 'openai';
   readonly model: string;
   private readonly baseURL: string;
 
-  // Виправлено: конструктор тепер приймає 2 аргументи, щоб відповідати викликам
   constructor(model?: string, baseURL?: string) {
     this.model = model ?? config.openaiModel;
     const gateway = process.env.GATEWAY_URL;
-    // Пріоритет: GATEWAY_URL -> baseURL -> defaults
-    this.baseURL = (gateway || baseURL || 'https://api.openai.com').replace(/\/v1$/, '');
+    // Дефолтний роут на шлюз, якщо GATEWAY_URL не передано в ENV
+    this.baseURL = (gateway || baseURL || 'http://agentgateway-external.agentgateway-system.svc.cluster.local').replace(/\/v1$/, '');
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {
@@ -23,13 +22,14 @@ export class OpenAIProvider implements AIClient {
     try {
       const skills = buildSkillsSystemAppendix(request.task);
       const system = request.systemPrompt + skills + '\n\n' + schemaInstruction(request.jsonSchema);
+      
       const url = `${this.baseURL}/v1/chat/completions`;
 
       const res = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.openaiApiKey}`,
+          'Content-Type': 'application/json'
+          // ВИДАЛЕНО: 'Authorization': `Bearer ${config.openaiApiKey}`
         },
         body: JSON.stringify({
           model: this.model,
@@ -47,7 +47,7 @@ export class OpenAIProvider implements AIClient {
       }
 
       const data = await res.json() as any;
-      const text = data.choices?.[0]?.message?.content;
+      const text = data.choices[0]?.message?.content;
       if (!text) throw new Error('Empty response from Gateway');
 
       aiRequestCounter.labels(request.task, 'success').inc();
