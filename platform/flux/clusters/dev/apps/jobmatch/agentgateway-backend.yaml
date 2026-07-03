@@ -24,13 +24,13 @@ spec:
             secretRef:
               name: openai-auth-secret
       # 3. Пріоритет: Gemini (Pro як основний, Flash як фінальний)
-      - name: gemini-pro-fallback
-        gemini:
-          model: models/gemini-2.5-pro
-        policies:
-          auth:
-            secretRef:
-              name: gemini-auth-secret
+#      - name: gemini-pro-fallback
+#        gemini:
+#          model: models/gemini-2.5-pro
+#        policies:
+#          auth:
+#            secretRef:
+#              name: gemini-auth-secret
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend 
