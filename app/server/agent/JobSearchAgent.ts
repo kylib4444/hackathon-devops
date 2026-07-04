@@ -8,7 +8,7 @@ import { webSearchJobs } from './tools/web-search.js';
 import { rankListingsWithLlm } from './synthesize.js';
 import { getCachedQuery, setCachedQuery, connectCache } from '../services/cache.js';
 
-const MAX_BOARDS_PER_SEARCH = 12;
+const MAX_BOARDS_PER_SEARCH = 2;
 
 function assertJobSearchReady(): void {
   const llm = resolveLlmConfig();
