@@ -8,7 +8,7 @@ import { webSearchJobs } from './tools/web-search.js';
 import { rankListingsWithLlm } from './synthesize.js';
 import { getCachedQuery, setCachedQuery, connectCache } from '../services/cache.js';
 
-const MAX_BOARDS_PER_SEARCH = 2;
+const MAX_BOARDS_PER_SEARCH = 3; // Enforce a hard cap for the UI
 
 function assertJobSearchReady(): void {
   const llm = resolveLlmConfig();
@@ -82,7 +82,6 @@ export async function runJobSearchAgent(
   assertJobSearchReady();
   await connectCache();
 
-  // Використовуємо явну типізацію (type assertion), щоб TypeScript розумів структуру даних з Redis
   const cached = await getCachedQuery(input.query, input.countryCode) as (JobMatchResult & { 
     agentMeta: { toolCalls: AgentToolCallLog[]; boardsQueried: number; listingsFound: number } 
   }) | null;
@@ -92,10 +91,9 @@ export async function runJobSearchAgent(
     return cached;
   }
 
-  const boards = selectBoardsForCountry(
-    input.countryCode,
-    MAX_BOARDS_PER_SEARCH
-  );
+  // Forcefully cap to 3 boards to prevent 60-second NGINX/Browser timeouts
+  let boards = selectBoardsForCountry(input.countryCode, MAX_BOARDS_PER_SEARCH);
+  boards = boards.slice(0, 3); 
 
   if (boards.length === 0) {
     throw new Error(`No job boards configured for country: ${input.countryCode}`);
@@ -106,17 +104,15 @@ export async function runJobSearchAgent(
   );
 
   const logs: AgentToolCallLog[] = [];
-  const batchSize = config.jobSearchConcurrency;
   const collected: RawJobListing[] = [];
 
-  for (let i = 0; i < boards.length; i += batchSize) {
-    const chunk = boards.slice(i, i + batchSize);
-    const chunkResults = await Promise.all(
-      chunk.map((board) => runBoardTool(board, input.query, logs))
-    );
-    for (const list of chunkResults) {
-      collected.push(...list);
-    }
+  for (const board of boards) {
+    console.info(`[agent] Fetching board ${board.name} sequentially...`);
+    const results = await runBoardTool(board, input.query, logs);
+    collected.push(...results);
+    
+    console.info(`[agent] Pausing for 4 seconds to respect API rate limits...`);
+    await new Promise(resolve => setTimeout(resolve, 4000));
   }
 
   const merged = dedupeListings(collected);
@@ -147,9 +143,7 @@ export async function runJobSearchAgent(
     },
   };
 
-  // Зберігаємо результат у кеш
   await setCachedQuery(input.query, input.countryCode, response);
-
   return response;
 }
 
@@ -159,27 +153,21 @@ export async function searchRawJobs(
 ): Promise<RawJobListing[]> {
   assertJobSearchReady();
 
-  const boards = selectBoardsForCountry(
-    countryCode,
-    MAX_BOARDS_PER_SEARCH
-  );
+  let boards = selectBoardsForCountry(countryCode, MAX_BOARDS_PER_SEARCH);
+  boards = boards.slice(0, 3); // Force cap to prevent timeouts
 
   if (boards.length === 0) {
     return [];
   }
 
   const logs: AgentToolCallLog[] = [];
-  const batchSize = config.jobSearchConcurrency;
   const collected: RawJobListing[] = [];
 
-  for (let i = 0; i < boards.length; i += batchSize) {
-    const chunk = boards.slice(i, i + batchSize);
-    const chunkResults = await Promise.all(
-      chunk.map((board) => runBoardTool(board, query, logs))
-    );
-    for (const list of chunkResults) {
-      collected.push(...list);
-    }
+  for (const board of boards) {
+    const results = await runBoardTool(board, query, logs);
+    collected.push(...results);
+    
+    await new Promise(resolve => setTimeout(resolve, 4000));
   }
 
   return dedupeListings(collected);
