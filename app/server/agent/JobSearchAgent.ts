@@ -1,87 +1,110 @@
 import { config } from '../config.js';
 import { resolveLlmConfig } from '../ai/resolve.js';
-import type { JobMatchResult } from '../types.js';
+import type { JobMatchResult, JobListing } from '../types.js';
 import { selectBoardsForCountry } from './boards.js';
-import type { AgentToolCallLog, JobSearchAgentInput, RawJobListing } from './types.js';
+import type { AgentToolCallLog, JobBoardDefinition, JobSearchAgentInput, RawJobListing } from './types.js';
 import { fetchJobBoard } from './tools/fetch-board.js';
 import { webSearchJobs } from './tools/web-search.js';
 import { rankListingsWithLlm } from './synthesize.js';
 import { getCachedQuery, setCachedQuery, connectCache } from '../services/cache.js';
 
-const MAX_BOARDS_PER_SEARCH = 3;
+// --- Helper Functions ---
 
 function assertJobSearchReady(): void {
   const llm = resolveLlmConfig();
   if (llm.demoMode || llm.provider === 'demo') {
-    throw new Error('Job search requires a real LLM provider. Set API keys and DEMO_MODE=false.');
+    throw new Error('Job search requires a real LLM provider.');
   }
 }
 
-function dedupeListings(listings: RawJobListing[]): RawJobListing[] {
+function dedupeListings(collected: RawJobListing[]): RawJobListing[] {
   const seen = new Set<string>();
-  const out: RawJobListing[] = [];
-  for (const l of listings) {
-    const key = l.applyUrl.toLowerCase();
-    if (seen.has(key)) continue;
+  return collected.filter(listing => {
+    const l = listing as any; 
+    const key = [l.id, l.applyUrl || l.url, l.title, l.company]
+      .filter(Boolean)
+      .map(val => String(val).trim())
+      .join('|')
+      .toLowerCase();
+      
+    if (seen.has(key)) return false;
     seen.add(key);
-    out.push(l);
-  }
-  return out;
+    return true;
+  });
 }
 
-async function runBoardTool(board: any, query: string, logs: AgentToolCallLog[]): Promise<RawJobListing[]> {
-  const logBase = { boardId: board.id, boardName: board.name };
+async function runBoardTool(board: JobBoardDefinition, query: string, logs: AgentToolCallLog[]): Promise<RawJobListing[]> {
   try {
-    if (board.parser !== 'web-only' && board.searchUrlTemplate) {
-      const fetched = await fetchJobBoard(board, query);
-      logs.push({ ...logBase, tool: 'fetch_job_board', status: 'ok', found: fetched.length });
-      if (fetched.length > 0) return fetched;
+    if (board.parser === 'web-only') {
+      return await webSearchJobs(board, query, config.jobSearchResultsPerBoard || 5);
     }
-    const fromWeb = await webSearchJobs(board, query, config.jobSearchResultsPerBoard);
-    logs.push({ ...logBase, tool: 'web_search_jobs', status: 'ok', found: fromWeb.length });
-    return fromWeb;
-  } catch (err) {
-    console.error(`[agent] Error fetching board ${board.name}:`, err);
+    return await fetchJobBoard(board, query);
+  } catch (error) {
+    console.error(`[agent] Failed for ${board.name}:`, error);
     return [];
   }
 }
 
-export async function runJobSearchAgent(input: JobSearchAgentInput) {
+// --- Main Logic ---
+
+export async function runJobSearchAgent(input: JobSearchAgentInput): Promise<JobMatchResult & { agentMeta?: any }> {
   assertJobSearchReady();
   await connectCache();
 
-  const boards = selectBoardsForCountry(input.countryCode, MAX_BOARDS_PER_SEARCH).slice(0, 3);
+  const cached = await getCachedQuery(input.query, input.countryCode);
+  if (cached) {
+    return cached as any;
+  }
+
+  const boards = selectBoardsForCountry(input.countryCode, 3).slice(0, 3);
   const logs: AgentToolCallLog[] = [];
   const collected: RawJobListing[] = [];
 
   for (const board of boards) {
-    console.info(`[agent] Fetching ${board.name} sequentially...`);
-    collected.push(...await runBoardTool(board, input.query, logs));
+    const results = await runBoardTool(board, input.query, logs);
+    collected.push(...results);
     await new Promise(resolve => setTimeout(resolve, 4000));
   }
 
   const merged = dedupeListings(collected);
 
-  // FALLBACK LOGIC: Bypass LLM if quota is exhausted
-  let ranked;
+  let result: JobMatchResult;
   try {
-    ranked = await rankListingsWithLlm(merged, boards, {
+    result = await rankListingsWithLlm(merged, boards, {
       userPrompt: input.userPrompt,
       cvSummary: input.cvSummary,
       cvSkills: input.cvSkills,
       jsonSchema: input.jsonSchema,
     });
   } catch (e) {
-    console.error("[agent] LLM quota exhausted, falling back to raw list.");
-    ranked = {
-      matches: merged.slice(0, 10).map(job => ({ 
-        ...job, 
+    console.warn("[agent] Ranking failed, falling back to raw list.");
+    result = {
+      jobs: merged.slice(0, 10).map(j => ({ 
+        ...(j as any), 
         score: 0, 
-        reasoning: "AI ranking unavailable (quota limit reached)" 
-      })),
-      summary: "Showing raw results because AI quota limit was reached."
+        reasoning: "AI ranking unavailable" 
+      } as JobListing)),
+      suggestions: ["Try a more specific search query."]
     };
   }
 
-  return { ...ranked, agentMeta: { toolCalls: logs, boardsQueried: boards.length, listingsFound: merged.length } };
+  const finalResult = { 
+    ...result, 
+    agentMeta: { toolCalls: logs, boardsQueried: boards.length, listingsFound: merged.length } 
+  };
+
+  await setCachedQuery(input.query, input.countryCode, finalResult);
+
+  return finalResult;
+}
+
+export async function searchRawJobs(query: string, countryCode: string = 'WORLDWIDE'): Promise<RawJobListing[]> {
+  const boards = selectBoardsForCountry(countryCode, 3).slice(0, 3);
+  const logs: AgentToolCallLog[] = [];
+  const collected: RawJobListing[] = [];
+  for (const board of boards) {
+    collected.push(...await runBoardTool(board, query, logs));
+    await new Promise(resolve => setTimeout(resolve, 4000));
+  }
+  return dedupeListings(collected);
 }
