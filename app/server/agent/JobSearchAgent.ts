@@ -76,7 +76,7 @@ export async function runJobSearchAgent(input: JobSearchAgentInput): Promise<Job
       cvSkills: input.cvSkills,
       jsonSchema: input.jsonSchema,
     });
-} catch (e) {
+  } catch (e) {
     console.warn("[agent] Ranking failed, falling back to raw list.");
     result = {
       jobs: merged.slice(0, 10).map(j => ({ 
@@ -85,7 +85,6 @@ export async function runJobSearchAgent(input: JobSearchAgentInput): Promise<Job
         reasoning: "AI ranking unavailable" 
       } as JobListing)),
       suggestions: ["Try a more specific search query."]
-      // 'summary' removed to satisfy TS2353 for JobMatchResult interface
     };
   }
 
@@ -94,7 +93,6 @@ export async function runJobSearchAgent(input: JobSearchAgentInput): Promise<Job
     agentMeta: { toolCalls: logs, boardsQueried: boards.length, listingsFound: merged.length } 
   };
 
-  // Prevent Redis/Cache connection failures from throwing a fatal 500 error
   try {
     await setCachedQuery(input.query, input.countryCode, finalResult);
   } catch (cacheError) {
@@ -102,4 +100,16 @@ export async function runJobSearchAgent(input: JobSearchAgentInput): Promise<Job
   }
 
   return finalResult;
+}
+
+// RESTORED EXPORT: Required by routes/mcp.ts
+export async function searchRawJobs(query: string, countryCode: string = 'WORLDWIDE'): Promise<RawJobListing[]> {
+  const boards = selectBoardsForCountry(countryCode, 3).slice(0, 3);
+  const logs: AgentToolCallLog[] = [];
+  const collected: RawJobListing[] = [];
+  for (const board of boards) {
+    collected.push(...await runBoardTool(board, query, logs));
+    await new Promise(resolve => setTimeout(resolve, 4000));
+  }
+  return dedupeListings(collected);
 }
